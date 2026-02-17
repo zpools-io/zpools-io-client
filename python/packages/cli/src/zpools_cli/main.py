@@ -12,8 +12,9 @@ from zpools_cli.config import (
 )
 from zpools_cli.utils import format_error_response
 from zpools_cli.shell_completion import completion_command
+from zpools_cli.help_scopes import ScopedGroup
 
-app = typer.Typer(no_args_is_help=True, add_completion=False)
+app = typer.Typer(no_args_is_help=True, add_completion=False, cls=ScopedGroup)
 app.add_typer(zpool.app, name="zpool")
 app.add_typer(sshkey.app, name="sshkey")
 app.add_typer(pat.app, name="pat")

@@ -8,8 +8,9 @@ from rich.console import Console
 from rich.table import Table
 from zpools_cli.utils import get_authenticated_client, format_error_response, is_interactive
 from zpools._generated.types import UNSET
+from zpools_cli.help_scopes import ScopedGroup
 
-app = typer.Typer(help="Manage SSH keys", no_args_is_help=True)
+app = typer.Typer(help="Manage SSH keys", no_args_is_help=True, cls=ScopedGroup)
 console = Console()
 
 def get_key_details(pubkey: str):

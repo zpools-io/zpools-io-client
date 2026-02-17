@@ -11,8 +11,9 @@ from zpools._generated.api.jobs import (
     get_job_job_id_history
 )
 from zpools._generated.types import UNSET
+from zpools_cli.help_scopes import ScopedGroup
 
-app = typer.Typer(help="Manage background jobs", no_args_is_help=True)
+app = typer.Typer(help="Manage background jobs", no_args_is_help=True, cls=ScopedGroup)
 console = Console()
 
 

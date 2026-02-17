@@ -13,9 +13,10 @@ from zpools._generated.api.billing import (
 from zpools._generated.models.post_codes_claim_body import PostCodesClaimBody
 from zpools._generated.models.post_dodo_start_body import PostDodoStartBody
 from zpools._generated.types import UNSET
+from zpools_cli.help_scopes import ScopedGroup
 import datetime
 
-app = typer.Typer(help="Manage billing and payments", no_args_is_help=True)
+app = typer.Typer(help="Manage billing and payments", no_args_is_help=True, cls=ScopedGroup)
 console = Console()
 
 @app.command("balance")

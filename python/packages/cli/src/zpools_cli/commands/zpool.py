@@ -23,8 +23,9 @@ from zpools._generated.models.post_zpool_body_volume_type import PostZpoolBodyVo
 from zpools._generated.models.post_zpool_zpool_id_modify_body import PostZpoolZpoolIdModifyBody
 from zpools._generated.models.post_zpool_zpool_id_modify_body_volume_type import PostZpoolZpoolIdModifyBodyVolumeType
 from zpools._generated.types import UNSET
+from zpools_cli.help_scopes import ScopedGroup
 
-app = typer.Typer(help="Manage ZFS pools", no_args_is_help=True)
+app = typer.Typer(help="Manage ZFS pools", no_args_is_help=True, cls=ScopedGroup)
 console = Console()
 
 

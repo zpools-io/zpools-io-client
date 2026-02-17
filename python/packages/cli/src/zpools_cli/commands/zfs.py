@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import List, Optional
 from rich.console import Console
 from zpools_cli.utils import get_ssh_client
+from zpools_cli.help_scopes import ScopedGroup
 
-app = typer.Typer(help="ZFS operations over SSH", no_args_is_help=True)
+app = typer.Typer(help="ZFS operations over SSH", no_args_is_help=True, cls=ScopedGroup)
 console = Console()
 
 def get_ssh_config(client, username):

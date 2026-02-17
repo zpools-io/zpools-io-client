@@ -5,8 +5,9 @@ from rich.console import Console
 from rich.table import Table
 from zpools_cli.utils import get_authenticated_client, format_error_response, format_timestamp
 from zpools._generated.types import UNSET
+from zpools_cli.help_scopes import ScopedGroup
 
-app = typer.Typer(help="Manage Personal Access Tokens", no_args_is_help=True)
+app = typer.Typer(help="Manage Personal Access Tokens", no_args_is_help=True, cls=ScopedGroup)
 console = Console()
 
 @app.command("list")
