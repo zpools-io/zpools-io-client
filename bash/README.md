@@ -67,14 +67,11 @@ REMOTE_POOL="you@ssh.zpools.io:your-remote-zpool-id/your-remote-dataset"
 ## Command Overview
 The CLI organizes commands by feature group:
 
-- Codes
-  - claim $code (Auth: JWT)
- - Billing
-   - billing balance  (Auth: JWT)
-   - billing ledger (Auth: JWT)
-   - billing start (Auth: JWT)
- - Personal Access Tokens (TBD docs)
-   - pat list | create | revoke
+- Billing (redeem codes and add credits on the dashboard)
+  - billing balance
+  - billing ledger
+- Personal Access Tokens (create PATs on the dashboard)
+  - pat list | revoke
  - SSH Keys
    - sshkey list | add | delete (Auth: JWT / PAT)
  - Jobs

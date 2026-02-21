@@ -1,7 +1,7 @@
 openapi: 3.0.1
 info:
   title: ZpoolsAPI
-  version: 2026-01-23 05:40:36UTC
+  version: 2026-02-20 20:39:00UTC
 servers:
 - url: https://api.zpools.io/v1
 tags:
@@ -40,61 +40,6 @@ paths:
         your JWT tokens or PAT.
       tags:
       - Authentication
-  /login:
-    post:
-      responses:
-        default:
-          description: Default response for POST /login
-        '200':
-          content:
-            application/json:
-              schema:
-                properties:
-                  detail:
-                    properties:
-                      access_token:
-                        description: JWT access token
-                        type: string
-                      expires_in:
-                        description: Token expiration in seconds
-                        type: integer
-                      id_token:
-                        description: JWT ID token
-                        type: string
-                      refresh_token:
-                        description: JWT refresh token
-                        type: string
-                    type: object
-                  message:
-                    type: string
-                type: object
-          description: Authentication successful
-        '401':
-          description: Invalid credentials
-      summary: Authenticate user and obtain JWT tokens
-      description: Authenticate with username/password and receive Cognito JWT tokens
-        for accessing protected endpoints.
-      tags:
-      - Authentication
-      requestBody:
-        content:
-          application/json:
-            example:
-              password: SecurePassword123
-              username: user@example.com
-            schema:
-              properties:
-                username:
-                  description: User's username
-                  type: string
-                password:
-                  description: User's password
-                  type: string
-              required:
-              - username
-              - password
-              type: object
-        required: true
   /billing/balance:
     get:
       responses:
@@ -225,6 +170,64 @@ paths:
           maximum: 5000
           minimum: 1
           type: integer
+  /billing/runway:
+    get:
+      responses:
+        default:
+          description: Default response for GET /billing/runway
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  detail:
+                    properties:
+                      runway:
+                        properties:
+                          daily_burn_ebs:
+                            description: Daily burn from EBS (current allocation)
+                            type: number
+                          daily_burn_total:
+                            type: number
+                          daily_tou_avg:
+                            type: number
+                          days_remaining_adjusted:
+                            description: Runway including ToU over lookback
+                            type: number
+                          days_remaining_ebs:
+                            description: Runway from EBS only
+                            type: number
+                          ending_balance:
+                            description: Current account balance
+                            type: number
+                          lookback_days:
+                            type: integer
+                          tou_total_in_lookback:
+                            type: number
+                        type: object
+                    type: object
+                  message:
+                    type: string
+                type: object
+          description: Runway retrieved
+      security:
+      - CognitoAuthorizer: []
+      summary: Get billing runway
+      description: 'Return burn rate and days remaining: EBS-only runway (current
+        allocation × pricing) and ToU-adjusted runway (includes time-of-use charges
+        over a lookback period). No date range; uses current balance and allocation.'
+      tags:
+      - Billing
+      parameters:
+      - description: Days of ToU history for adjusted runway (default 30, max 90)
+        in: query
+        name: lookback_days
+        required: false
+        schema:
+          default: 30
+          maximum: 90
+          minimum: 1
+          type: integer
   /billing/summary:
     get:
       responses:
@@ -286,21 +289,24 @@ paths:
                                   type: string
                               type: object
                             type: array
-                          time_of_use_charges:
-                            items:
-                              properties:
-                                amount_usd:
-                                  type: number
-                                note:
-                                  type: string
-                                posted_ts:
-                                  type: string
-                                source:
-                                  type: string
-                                zpool_id:
-                                  type: string
-                              type: object
-                            type: array
+                          time_of_use_summary:
+                            description: Time-of-use summary only (use ledger endpoint
+                              for per-entry detail)
+                            properties:
+                              by_source:
+                                additionalProperties:
+                                  properties:
+                                    count:
+                                      type: integer
+                                    total_usd:
+                                      type: number
+                                    zero_count:
+                                      type: integer
+                                  type: object
+                                type: object
+                              zero_egress_count:
+                                type: integer
+                            type: object
                           totals:
                             properties:
                               credits_applied:
@@ -321,169 +327,33 @@ paths:
                 type: object
           description: Billing summary retrieved
         '400':
-          description: Invalid date format
+          description: Invalid date format or date range exceeds 32 days
       security:
       - CognitoAuthorizer: []
       summary: Get billing summary
-      description: Retrieve aggregated billing summary grouped by zpool and rate period.
-        Groups hourly storage charges into periods, lists time-of-use charges (scrub
-        jobs, egress) separately, and calculates totals.
+      description: Retrieve aggregated billing summary for a date range (max 32 days).
+        When since/until omitted, returns the preceding calendar month. Groups hourly
+        storage charges into periods, includes time_of_use_summary (by source, non-zero
+        charges, zero egress count), and calculates totals. For longer ranges use
+        the ledger API.
       tags:
       - Billing
       parameters:
-      - description: Start date (YYYY-MM-DD format)
+      - description: First date (YYYY-MM-DD). With until, span must not exceed 32
+          days.
         in: query
         name: since
         required: false
         schema:
           format: date
           type: string
-      - description: End date (YYYY-MM-DD format)
+      - description: Last date (YYYY-MM-DD). With since, span must not exceed 32 days.
         in: query
         name: until
         required: false
         schema:
           format: date
           type: string
-  /codes/claim:
-    post:
-      responses:
-        default:
-          description: Default response for POST /codes/claim
-        '201':
-          content:
-            application/json:
-              schema:
-                properties:
-                  detail:
-                    properties:
-                      balance_after_cents:
-                        description: Balance after claim
-                        type: integer
-                      claim:
-                        properties:
-                          amount_cents:
-                            description: Credits added in cents
-                            type: integer
-                          code:
-                            description: Code that was claimed
-                            type: string
-                          code_type:
-                            description: Type of code
-                            type: string
-                          joined_group:
-                            description: Group joined (if applicable)
-                            type: string
-                        type: object
-                      dev_mode:
-                        description: Whether in development mode
-                        type: boolean
-                      pool_remaining_cents:
-                        description: Remaining pool credits
-                        type: integer
-                    type: object
-                  message:
-                    type: string
-                type: object
-          description: Code redeemed successfully
-        '400':
-          description: Invalid or malformed request
-        '409':
-          description: Code already claimed
-        '410':
-          description: Code exhausted or disabled
-        '422':
-          description: Invalid code
-        '428':
-          content:
-            application/json:
-              schema:
-                properties:
-                  detail:
-                    properties:
-                      tos_url:
-                        description: URL of terms that must be accepted
-                        type: string
-                    type: object
-                  message:
-                    type: string
-                type: object
-          description: Terms acceptance required
-      security:
-      - CognitoAuthorizer: []
-      summary: Redeem credit code
-      description: Apply a promotional or gift credit code to account.
-      tags:
-      - Billing
-      requestBody:
-        content:
-          application/json:
-            example:
-              code: PROMO2024
-            schema:
-              properties:
-                code:
-                  description: Credit code to redeem
-                  type: string
-                tos:
-                  description: Terms of Service acceptance (required if code requires
-                    ToS)
-                  properties:
-                    accepted_at:
-                      description: ISO8601 timestamp of acceptance
-                      format: date-time
-                      type: string
-                    url:
-                      description: ToS URL being accepted
-                      type: string
-                  type: object
-              required:
-              - code
-              type: object
-        required: true
-  /dodo/start:
-    post:
-      responses:
-        default:
-          description: Default response for POST /dodo/start
-        '201':
-          content:
-            application/json:
-              schema:
-                properties:
-                  detail:
-                    properties:
-                      payment_link:
-                        description: URL to complete payment
-                        type: string
-                      purchase_id:
-                        type: string
-                    type: object
-                  message:
-                    type: string
-                type: object
-          description: Payment session created
-      security:
-      - CognitoAuthorizer: []
-      summary: Initiate payment session
-      description: Start a DodoPay payment session to add credits to account.
-      tags:
-      - Billing
-      requestBody:
-        content:
-          application/json:
-            example:
-              quantity: 10
-            schema:
-              properties:
-                quantity:
-                  description: Payment amount in dollars
-                  minimum: 1
-                  type: integer
-              required:
-              - quantity
-              type: object
-        required: true
   /sshkey:
     get:
       responses:
@@ -681,64 +551,6 @@ paths:
       description: Retrieve all active PATs for the authenticated user.
       tags:
       - Personal Access Tokens
-    post:
-      responses:
-        default:
-          description: Default response for POST /pat
-        '201':
-          content:
-            application/json:
-              schema:
-                properties:
-                  detail:
-                    properties:
-                      key_id:
-                        type: string
-                      token:
-                        description: PAT value (only shown once)
-                        type: string
-                    type: object
-                  message:
-                    type: string
-                type: object
-          description: PAT created successfully
-      security:
-      - CognitoAuthorizer: []
-      summary: Create personal access token
-      description: Generate a new PAT for API authentication.
-      tags:
-      - Personal Access Tokens
-      requestBody:
-        content:
-          application/json:
-            example:
-              label: CLI Access Token
-              scopes:
-              - zpool
-              - job
-              - sshkey
-            schema:
-              properties:
-                expiry:
-                  description: Optional soft expiry date (YYYY-MM-DD)
-                  format: date
-                  type: string
-                label:
-                  description: Token label for identification
-                  type: string
-                scopes:
-                  description: Optional list of scopes (e.g., 'pat', 'sshkey', 'job',
-                    'zpool')
-                  items:
-                    type: string
-                  type: array
-                tenant_id:
-                  description: Optional tenant ID for multi-tenant scenarios
-                  type: string
-              required:
-              - label
-              type: object
-        required: true
   /pat/{key_id}:
     delete:
       responses:

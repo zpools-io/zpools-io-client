@@ -8,7 +8,7 @@ from zpools_cli.commands import zpool, sshkey, pat, job, billing, zfs
 from zpools_cli.config import (
     COMMANDS_NEEDING_CONFIG,
     build_client_config,
-    run_config_wizard,
+    run_pat_configure_wizard,
 )
 from zpools_cli.utils import format_error_response
 from zpools_cli.shell_completion import completion_command
@@ -37,16 +37,41 @@ def main_callback(
         help="Path to zpoolrc config file (default: ~/.config/zpools.io/zpoolrc)",
         file_okay=True,
         dir_okay=False,
-    )
+    ),
 ):
     """zpools.io CLI - Manage zpools, jobs, SSH keys, and billing."""
     rc_file_path = rcfile if rcfile is not None else _default_rc_path()
-    if not rc_file_path.exists() and ctx.invoked_subcommand in COMMANDS_NEEDING_CONFIG:
-        if not run_config_wizard(rc_file_path, console):
-            raise typer.Exit(0)
+    if ctx.invoked_subcommand in COMMANDS_NEEDING_CONFIG:
+        if not rc_file_path.exists():
+            if not run_pat_configure_wizard(rc_file_path, console, existing_config=None, plaintext=False):
+                raise typer.Exit(0)
+        else:
+            config_pre = build_client_config(rc_file=rc_file_path)
+            if not (config_pre.get("pat") or "").strip():
+                if not run_pat_configure_wizard(rc_file_path, console, existing_config=config_pre, plaintext=False):
+                    raise typer.Exit(0)
     config = build_client_config(rc_file=rc_file_path)
     config["rc_file_path"] = rc_file_path
     ctx.obj = config
+
+@app.command()
+def login(
+    ctx: typer.Context,
+    plaintext: bool = typer.Option(
+        False,
+        "--plaintext",
+        help="Use plaintext prompts (no Rich UI)",
+    ),
+):
+    """
+    Run the PAT configure wizard: open the dashboard to create a PAT, then paste it here.
+    Use when you have no config yet or want to add/update a PAT. Uses same rcfile as other commands (--rcfile to override).
+    """
+    rc_file_path = ctx.obj.get("rc_file_path", _default_rc_path()) if ctx.obj else _default_rc_path()
+    existing = build_client_config(rc_file=rc_file_path) if rc_file_path.exists() else None
+    if not run_pat_configure_wizard(rc_file_path, console, existing_config=existing, plaintext=plaintext):
+        raise typer.Exit(0)
+
 
 @app.command()
 def hello(ctx: typer.Context):
@@ -74,7 +99,7 @@ def version():
     """
     Show the CLI version.
     """
-    console.print("zpools-cli v0.1.0")
+    console.print("zpools-cli v2.0.0")
 
 @app.command()
 def completion(

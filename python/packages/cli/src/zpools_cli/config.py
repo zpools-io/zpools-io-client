@@ -1,13 +1,527 @@
 """Configuration loading for zpools CLI."""
+import getpass
 import os
+import sys
+import webbrowser
+from datetime import date, timedelta
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Set, Tuple
+from urllib.parse import urlencode, urlparse, urlunparse
+
+from rich.box import ROUNDED
+from rich.console import Group
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+
+try:
+    import termios
+    import tty
+    _HAS_TERMIOS = True
+except ImportError:
+    _HAS_TERMIOS = False
 
 DEFAULT_SSH_KEY_PATH = "~/.ssh/id_zpool_ed25519"
 DEFAULT_SSH_KEYGEN_CMD = f"ssh-keygen -t ed25519 -f {DEFAULT_SSH_KEY_PATH}"
 
 # Commands that require a config file (and will trigger the wizard if none exists)
 COMMANDS_NEEDING_CONFIG = ("hello", "zpool", "sshkey", "pat", "job", "billing", "zfs")
+
+# PAT scopes for the configure wizard (id, short description). Order matches dashboard tokens page.
+PAT_SCOPES = [
+    ("sshkey", "Manage SSH keys (list, add, delete)"),
+    ("job", "List and inspect jobs"),
+    ("zpool", "Create and manage zpools"),
+    ("pat", "List and revoke PATs via API"),
+    ("billing", "Billing (read); usually not needed for CLI"),
+    ("*", "All PAT-enabled endpoints (wildcard)"),
+]
+
+
+def _is_valid_api_url(s: str) -> bool:
+    """True if s looks like an API URL (scheme, host with no spaces)."""
+    if not s or not s.strip():
+        return False
+    parsed = urlparse(s.strip())
+    if not parsed.scheme or not parsed.netloc:
+        return False
+    host = parsed.netloc.split(":")[0]
+    if " " in host or "\n" in host or "[" in host:
+        return False
+    return True
+
+
+def api_url_to_website_base_url(api_url: str) -> str:
+    """
+    Derive website base URL from API URL.
+    e.g. https://api.zpools.io/v1 -> https://zpools.io
+         https://api.dev.zpools.io/v1 -> https://dev.zpools.io
+    """
+    if not _is_valid_api_url(api_url):
+        return "https://zpools.io"
+    parsed = urlparse(api_url)
+    if not parsed.scheme or not parsed.netloc:
+        return "https://zpools.io"
+    host = parsed.netloc.split(":")[0]
+    if host.startswith("api."):
+        base_host = host[4:]  # strip "api."
+        return urlunparse((parsed.scheme or "https", base_host, "", "", "", ""))
+    return urlunparse((parsed.scheme or "https", host, "", "", "", ""))
+
+
+def _build_tokens_url(
+    api_url: str,
+    label: Optional[str] = None,
+    scopes: Optional[str] = None,
+    expiry: Optional[str] = None,
+) -> str:
+    """Build dashboard tokens page URL with optional query params (create=1, label, scopes, expiry)."""
+    base = api_url_to_website_base_url(api_url)
+    url = f"{base.rstrip('/')}/dashboard/tokens"
+    params: Dict[str, str] = {}
+    params["create"] = "1"
+    if label and label.strip():
+        params["label"] = label.strip()
+    if scopes and scopes.strip():
+        params["scopes"] = scopes.strip().replace(" ", "")
+    if expiry and expiry.strip():
+        params["expiry"] = expiry.strip()
+    if params:
+        url = f"{url}?{urlencode(params)}"
+    return url
+
+
+def _read_key() -> Optional[str]:
+    """Read one key from stdin (up, down, space, enter). Returns None if not a TTY or on error."""
+    if not _HAS_TERMIOS or not sys.stdin.isatty():
+        return None
+    fd = sys.stdin.fileno()
+    try:
+        old = termios.tcgetattr(fd)
+    except termios.error:
+        return None
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+        if ch == "\x1b":
+            sub = sys.stdin.read(2)
+            if sub == "[A":
+                return "up"
+            if sub == "[B":
+                return "down"
+            return None
+        if ch == " ":
+            return "space"
+        if ch in "\r\n":
+            return "enter"
+        return None
+    except (OSError, KeyboardInterrupt):
+        return None
+    finally:
+        try:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        except termios.error:
+            pass
+
+
+def _prompt_scopes_interactive(console) -> str:
+    """
+    Interactive scope selection: up/down move, space toggles (or confirms on Accept).
+    * is exclusive with other scopes. Accept is dim until at least one scope is selected.
+    Returns comma-joined scope ids or '*'.
+    """
+    if not _HAS_TERMIOS or not sys.stdin.isatty():
+        return "zpool,job"
+    n_scopes = len(PAT_SCOPES)
+    WILDCARD_INDEX = n_scopes - 1  # * is last scope
+    cursor = 0  # 0 .. n_scopes (n_scopes = Accept row)
+    selected: Set[int] = set()
+    ACCEPT_INDEX = n_scopes
+
+    def build_table() -> Table:
+        table = Table(box=ROUNDED, show_header=True, header_style="bold")
+        table.add_column("", width=1)   # cursor
+        table.add_column("", width=1)   # selected (* or space)
+        table.add_column("Scope", width=10)
+        table.add_column("Description", width=52)
+        for i, (scope_id, desc) in enumerate(PAT_SCOPES):
+            cur = ">" if cursor == i else " "
+            mark = "*" if i in selected else " "
+            is_highlight = i in selected
+            row_style = "" if is_highlight else "dim"
+            table.add_row(cur, mark, scope_id, desc, style=row_style)
+        # Accept row: Scope = "Accept"; Description = "choose at least one scope" when dim, else empty
+        cur_accept = ">" if cursor == ACCEPT_INDEX else " "
+        accept_ready = len(selected) > 0
+        accept_style = "" if accept_ready else "dim"
+        accept_desc = "" if accept_ready else "choose at least one scope"
+        table.add_row(cur_accept, " ", "Accept", accept_desc, style=accept_style)
+        return table
+
+    def build_renderable():
+        table = build_table()
+        footer = "[dim]↑/↓ move   Space toggle or confirm on Accept[/dim]"
+        return Panel(Group(table, "", footer), title="PAT scopes", box=ROUNDED, border_style="blue")
+
+    with Live(build_renderable(), console=console, refresh_per_second=4) as live:
+        while True:
+            live.update(build_renderable())
+            key = _read_key()
+            if key == "up":
+                cursor = max(0, cursor - 1)
+            elif key == "down":
+                cursor = min(ACCEPT_INDEX, cursor + 1)
+            elif key == "space":
+                if cursor < n_scopes:
+                    if cursor in selected:
+                        selected.discard(cursor)
+                    else:
+                        if cursor == WILDCARD_INDEX:
+                            selected.clear()
+                            selected.add(WILDCARD_INDEX)
+                        else:
+                            selected.discard(WILDCARD_INDEX)
+                            selected.add(cursor)
+                elif cursor == ACCEPT_INDEX and selected:
+                    break
+            elif key == "enter":
+                if cursor == ACCEPT_INDEX and selected:
+                    break
+
+    # Build result: if only * is selected, return "*"; else comma-joined ids
+    if selected == {WILDCARD_INDEX}:
+        return "*"
+    return ",".join(PAT_SCOPES[i][0] for i in sorted(selected))
+
+
+def _prompt_scopes_plaintext(console) -> str:
+    """Plaintext scope selection: numbered list, comma-separated numbers. * (6) exclusive; at least one required."""
+    n_scopes = len(PAT_SCOPES)
+    WILDCARD_INDEX = n_scopes - 1
+    for i, (scope_id, desc) in enumerate(PAT_SCOPES):
+        print(f"  {i + 1}. {scope_id:<8}  {desc}")
+    print("  7. Accept  choose at least one scope")
+    while True:
+        sys.stdout.write("Enter scope numbers (e.g. 1,2,3). * is 6, exclusive. At least one: ")
+        sys.stdout.flush()
+        raw = input().strip()
+        parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
+        indices: Set[int] = set()
+        for p in parts:
+            try:
+                n = int(p)
+                if 1 <= n <= 6:
+                    indices.add(n - 1)
+            except ValueError:
+                pass
+        if not indices:
+            print("Choose at least one scope.")
+            continue
+        if WILDCARD_INDEX in indices:
+            indices = {WILDCARD_INDEX}
+        if indices == {WILDCARD_INDEX}:
+            return "*"
+        return ",".join(PAT_SCOPES[i][0] for i in sorted(indices))
+
+
+def _parse_iso8601_date(s: str) -> Optional[date]:
+    """Parse ISO 8601 date (YYYY-MM-DD). Returns None if invalid."""
+    s = s.strip()
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _prompt_expiry_interactive(console) -> str:
+    """
+    Up/down selector for PAT expiry: presets (1/3/6/12 months from today, max 1 year)
+    plus Custom to enter an ISO 8601 date (YYYY-MM-DD). Enter to select.
+    """
+    today = date.today()
+    max_date = today + timedelta(days=365)
+    presets: List[Tuple[str, date]] = [
+        ("1 month", today + timedelta(days=30)),
+        ("3 months", today + timedelta(days=90)),
+        ("6 months", today + timedelta(days=180)),
+        ("1 year", min(today + timedelta(days=365), max_date)),
+    ]
+    # Cap preset dates at max_date
+    presets = [(label, min(d, max_date)) for label, d in presets]
+    options: List[Tuple[str, str]] = [(label, d.isoformat()) for label, d in presets]
+    options.append(("Custom (enter YYYY-MM-DD)", ""))
+
+    if not _HAS_TERMIOS or not sys.stdin.isatty():
+        return presets[0][1].isoformat()
+
+    cursor = 0
+    n = len(options)
+
+    def build_table() -> Table:
+        table = Table(box=ROUNDED, show_header=True, header_style="bold")
+        table.add_column("", width=1)
+        table.add_column("Expiry", width=28)
+        table.add_column("Date", width=12)
+        for i, (label, iso) in enumerate(options):
+            cur = ">" if cursor == i else " "
+            date_str = iso if iso else "(enter when selected)"
+            table.add_row(cur, label, date_str)
+        return table
+
+    def build_renderable():
+        return Panel(
+            Group(build_table(), "", "[dim]↑/↓ move   Space or Enter to select   Max 1 year from today[/dim]"),
+            title="PAT expiry",
+            box=ROUNDED,
+            border_style="blue",
+        )
+
+    with Live(build_renderable(), console=console, refresh_per_second=4) as live:
+        while True:
+            live.update(build_renderable())
+            key = _read_key()
+            if key == "up":
+                cursor = max(0, cursor - 1)
+            elif key == "down":
+                cursor = min(n - 1, cursor + 1)
+            elif key in ("enter", "space"):
+                if cursor < n - 1:
+                    return options[cursor][1]
+                break
+
+    # Custom selected: prompt for ISO 8601 date
+    while True:
+        sys.stdout.write("Expiry date (YYYY-MM-DD, max 1 year from today): ")
+        sys.stdout.flush()
+        raw = input().strip()
+        if not raw:
+            return presets[0][1].isoformat()
+        d = _parse_iso8601_date(raw)
+        if d is None:
+            console.print("[red]Invalid date. Use ISO 8601 (YYYY-MM-DD).[/red]")
+            continue
+        if d < today:
+            console.print("[red]Expiry must be today or in the future.[/red]")
+            continue
+        if d > max_date:
+            console.print("[red]Expiry must be at most 1 year from today.[/red]")
+            continue
+        return d.isoformat()
+
+
+def _prompt_expiry_plaintext(console) -> str:
+    """Plaintext expiry: numbered presets 1-4, 5 = custom (ISO 8601 date, max 1 year)."""
+    today = date.today()
+    max_date = today + timedelta(days=365)
+    presets: List[Tuple[str, date]] = [
+        ("1 month", today + timedelta(days=30)),
+        ("3 months", today + timedelta(days=90)),
+        ("6 months", today + timedelta(days=180)),
+        ("1 year", min(today + timedelta(days=365), max_date)),
+    ]
+    presets = [(label, min(d, max_date)) for label, d in presets]
+    for i, (label, d) in enumerate(presets, 1):
+        print(f"  {i}. {label:<12}  {d.isoformat()}")
+    print("  5. Custom (YYYY-MM-DD)")
+    while True:
+        sys.stdout.write("Enter number (1-5): ")
+        sys.stdout.flush()
+        raw = input().strip()
+        if raw == "5":
+            break
+        if raw in ("1", "2", "3", "4"):
+            return presets[int(raw) - 1][1].isoformat()
+        print("Enter 1, 2, 3, 4, or 5.")
+    while True:
+        sys.stdout.write("Expiry date (YYYY-MM-DD, max 1 year from today): ")
+        sys.stdout.flush()
+        raw = input().strip()
+        if not raw:
+            return presets[0][1].isoformat()
+        d = _parse_iso8601_date(raw)
+        if d is None:
+            print("Invalid date. Use YYYY-MM-DD.")
+            continue
+        if d < today:
+            print("Expiry must be today or in the future.")
+            continue
+        if d > max_date:
+            print("Expiry must be at most 1 year from today.")
+            continue
+        return d.isoformat()
+
+
+def _write_rcfile_with_pat(
+    rc_file_path: Path,
+    api_url: str,
+    pat: str,
+    existing_config: Optional[Dict[str, str]] = None,
+) -> None:
+    """Write or update rcfile with ZPOOL_API_URL and ZPOOLPAT; chmod 0o600."""
+    rc_file_path = Path(rc_file_path)
+    rc_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def escape_value(v: str) -> str:
+        if "\n" in v or '"' in v or " " in v:
+            return '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        return v
+
+    api_line = f"ZPOOL_API_URL={escape_value(api_url)}"
+    pat_line = f"ZPOOLPAT={escape_value(pat)}"
+
+    if existing_config is not None and rc_file_path.exists():
+        lines = rc_file_path.read_text(encoding="utf-8").splitlines()
+        seen_api = False
+        seen_pat = False
+        new_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("ZPOOL_API_URL="):
+                new_lines.append(api_line)
+                seen_api = True
+                continue
+            if stripped.startswith("ZPOOLPAT="):
+                new_lines.append(pat_line)
+                seen_pat = True
+                continue
+            new_lines.append(line)
+        if not seen_api:
+            new_lines.append(api_line)
+        if not seen_pat:
+            new_lines.append(pat_line)
+        rc_file_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    else:
+        comment_lines = [
+            "",
+            "# Full reference: https://github.com/zpools-io/zpools-io-client/blob/main/docs/configuration.md",
+            "# Optional: SSH_HOST, SSH_PRIVKEY_FILE, etc.",
+        ]
+        rc_file_path.write_text(
+            "\n".join([api_line, pat_line] + comment_lines) + "\n",
+            encoding="utf-8",
+        )
+    rc_file_path.chmod(0o600)
+
+
+def _has_existing_config(existing_config: Optional[Dict[str, str]]) -> bool:
+    """True if we are updating an existing config file (vs creating from scratch)."""
+    if existing_config is None:
+        return False
+    # Any meaningful key from the rc file indicates existing config (e.g. api_url, ssh_host, etc.)
+    return bool(existing_config)
+
+
+def run_pat_configure_wizard(
+    rc_file_path: Path,
+    console,
+    existing_config: Optional[Dict[str, str]] = None,
+    plaintext: bool = False,
+) -> bool:
+    """
+    PAT-only configure flow: build dashboard URL, open browser, prompt for pasted PAT, write rcfile.
+    Distinguishes "no config yet" vs "config exists but missing PAT" so we don't imply overwriting.
+    If plaintext is True, use plaintext prompts (no Rich UI). Returns True if config was written.
+    """
+    has_existing = _has_existing_config(existing_config)
+    if has_existing:
+        console.print(
+            "[yellow]Your config file exists but no PAT (ZPOOLPAT) is set. "
+            "Add a PAT to your existing config? Other settings will be kept.[/yellow]"
+        )
+        sys.stdout.write("Add PAT now? [y/N]: ")
+    else:
+        console.print(
+            "[yellow]You don't have a config file yet. "
+            "Create one now? We'll set the API URL and add a PAT.[/yellow]"
+        )
+        sys.stdout.write("Create config now? [y/N]: ")
+    sys.stdout.flush()
+    create = input().strip().lower()
+    if create not in ("y", "yes"):
+        if has_existing:
+            console.print(
+                "Add ZPOOLPAT=your_token to your config file manually, or run [bold]zpcli login[/bold] to try again."
+            )
+        else:
+            console.print(
+                "Run zpcli again when you have a PAT, or create one at the dashboard and set ZPOOLPAT in your config."
+            )
+        return False
+
+    # 1. API domain: pre-fill from existing config when updating
+    default_api_url = "https://api.zpools.io/v1"
+    if has_existing and (existing_config or {}).get("api_url"):
+        default_api_url = (existing_config or {}).get("api_url", default_api_url)
+    sys.stdout.write(f"\nAPI domain [{default_api_url}]: ")
+    sys.stdout.flush()
+    raw = input().strip()
+    api_url = raw or default_api_url
+    if not api_url.startswith("http"):
+        api_url = "https://" + api_url
+    if not _is_valid_api_url(api_url):
+        api_url = default_api_url
+
+    # 2. Label and scopes (for URL pre-fill)
+    default_label = "CLI - laptop"
+    sys.stdout.write(f"PAT label for the website form [{default_label}]: ")
+    sys.stdout.flush()
+    label_raw = input().strip()
+    label = label_raw if label_raw else default_label
+    if plaintext:
+        print("\nPAT scopes:")
+        scopes = _prompt_scopes_plaintext(console)
+        print("\nPAT expiry:")
+        expiry = _prompt_expiry_plaintext(console)
+    else:
+        console.print("\nSelect PAT scopes (↑/↓ move, Space toggle, Enter on Accept to confirm):")
+        scopes = _prompt_scopes_interactive(console)
+        console.print("\nSelect PAT expiry (↑/↓ move, Enter to select, max 1 year):")
+        expiry = _prompt_expiry_interactive(console)
+
+    # 3. Build URL and print / open
+    url = _build_tokens_url(api_url, label=label, scopes=scopes, expiry=expiry)
+    console.print(f"\n[bold]Open this URL to create a PAT:[/bold]\n  {url}")
+    sys.stdout.write("Open in browser? [Y/n]: ")
+    sys.stdout.flush()
+    open_browser = input().strip().lower()
+    if open_browser not in ("n", "no"):
+        try:
+            webbrowser.open(url)
+        except Exception:
+            console.print("[dim]Could not open browser; copy the URL above.[/dim]")
+
+    # 4. Prompt for PAT (masked)
+    pat = getpass.getpass("Paste your PAT (value will not be echoed): ").strip()
+    if not pat:
+        console.print("[red]No PAT entered. Configuration cancelled.[/red]")
+        return False
+
+    # 5. Write rcfile (merge into existing when has_existing)
+    _write_rcfile_with_pat(rc_file_path, api_url, pat, existing_config=existing_config)
+    if has_existing:
+        console.print(f"[green]Updated config (added PAT)[/green] {rc_file_path}")
+    else:
+        console.print(f"[green]Wrote config to[/green] {rc_file_path}")
+
+    # 6. Validate PAT with GET /hello
+    console.print("Validating PAT...")
+    try:
+        from zpools import ZPoolsClient
+        from zpools._generated.api.authentication import get_hello
+        client = ZPoolsClient(api_url=api_url, pat=pat)
+        auth_client = client.get_authenticated_client()
+        response = get_hello.sync_detailed(client=auth_client)
+        if response.status_code == 200:
+            console.print("[green]PAT validated successfully.[/green]")
+        else:
+            console.print("[yellow]PAT was saved but validation returned a non-200 response.[/yellow]")
+    except Exception as e:
+        console.print("[yellow]PAT was saved but could not be validated.[/yellow]")
+        console.print(f"[dim]{e}[/dim]")
+
+    return True
 
 
 def run_config_wizard(rc_file_path: Path, console) -> bool:

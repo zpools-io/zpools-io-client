@@ -1,16 +1,14 @@
 # Billing commands
 
-`zpcli billing` — View account balance, transaction history, and aggregated summary; redeem credit codes (e.g. beta invite); or start a payment flow to add credits. Use these commands to understand what you’re charged for (storage, time-of-use) and to manage your balance.
+`zpcli billing` — View account balance, transaction history, and aggregated summary. Use these commands to understand what you’re charged for (storage, time-of-use) and to manage your balance.
 
-**Authentication:** JWT or PAT. Billing endpoints require the `billing` scope if you use a PAT. See [Authentication](../../../../docs/authentication.md#scopes). For **claim**, you must be authenticated with **JWT** (username/password), not a PAT.
+**Authentication:** Use a PAT with the `billing` scope. See [Authentication](../../../../docs/authentication.md#pat-scopes). Redeem credit codes and add credits on the **dashboard Billing page** (sign in at the website, then Dashboard → Billing).
 
 ## Commands
 
 - `zpcli billing balance` — Show current account balance in USD.
 - `zpcli billing ledger` — Show billing transaction history with optional date range and limit.
 - `zpcli billing summary` — Show aggregated billing summary for a period (storage charges, time-of-use charges, credits, totals).
-- `zpcli billing claim <code>` — Redeem a credit code (beta invite, promotional credits, etc.). Requires JWT.
-- `zpcli billing start <amount>` — Start a payment session to add credits (opens a URL to complete payment). Minimum amount $1.
 
 ---
 
@@ -147,81 +145,7 @@ zpcli billing summary --since 2025-06-01 --local --json
 
 ---
 
-## claim
-
-```text
-zpcli billing claim <code> [--json]
-```
-
-Redeems a **credit code** (e.g. beta invite code, promotional credits). The code is applied to your account and your balance increases by the code’s value. Each code is typically one-time use.
-
-**Authentication:** You must be authenticated with **JWT** (username/password). PAT authentication is not accepted for claim; use interactive login or `ZPOOL_USER` / `ZPOOL_PASSWORD` in the environment.
-
-**Argument**
-
-- **code** — The credit code to redeem (exact string as provided, e.g. from email or invite).
-
-**Options**
-
-- `--json` — Output raw JSON instead of the formatted success message.
-
-**Success output**
-
-On success (non-JSON), the CLI prints:
-
-- A success message.
-- **Added:** The amount added in USD (e.g. `Added: $10.00`).
-
-The new balance is not shown; run `zpcli billing balance` to see your updated balance.
-
-If the code is invalid, already used, or expired, the CLI reports an error.
-
-**Examples**
-
-```text
-zpcli billing claim MY-BETA-CODE-123
-zpcli billing claim MY-BETA-CODE-123 --json
-```
-
----
-
-## start
-
-```text
-zpcli billing start <amount> [--json]
-```
-
-Starts a **payment session** to add credits to your account. The CLI prints a **payment URL**; open it in a browser to complete payment (e.g. card or other methods offered by the provider). Used for onboarding or when you want to add funds.
-
-**Argument**
-
-- **amount** — Amount in **dollars** (integer) to add. **Minimum: $1.** If amount is less than 1, the CLI prints *Amount must be at least $1* and exits.
-
-**Options**
-
-- `--json` — Output raw JSON instead of the formatted message and URL.
-
-**Success output**
-
-On success (non-JSON), the CLI prints:
-
-- A success message.
-- *Please visit this URL to complete payment:*
-- The **payment URL** (clickable in terminals that support links).
-
-Open the URL in a browser and complete the payment flow; your balance will be updated after payment succeeds.
-
-**Examples**
-
-```text
-zpcli billing start 10
-zpcli billing start 25 --json
-```
-
----
-
-## See also
 
 - [Command reference](commands.md)
-- [Authentication](../../../../docs/authentication.md#scopes) — JWT vs PAT, billing scope, non-interactive use
+- [Authentication](../../../../docs/authentication.md#pat-scopes) — PAT scopes, billing scope
 - [Storage units](../../../../docs/reference/storage-units.md) — GiB vs GB; summary may show sizes in GB; zpool sizes elsewhere use GiB

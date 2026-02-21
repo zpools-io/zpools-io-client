@@ -6,8 +6,6 @@ from pathlib import Path
 from typing import Optional
 
 from ._generated import Client
-from ._generated.api.authentication import post_login
-from ._generated.models.post_login_body import PostLoginBody
 
 
 class AuthManager:
@@ -79,24 +77,24 @@ class AuthManager:
         return None
     
     def _login(self) -> str:
-        """Perform login to get new JWT tokens."""
+        """Perform login to get new JWT tokens (direct HTTP; not in published spec)."""
         if not self.username or not self.password:
             raise ValueError("Username and password are required for login.")
 
-        response = post_login.sync_detailed(
-            client=self._raw_client,
-            body=PostLoginBody(username=self.username, password=self.password)
-        )
+        url = f"{self.api_url.rstrip('/')}/login"
+        payload = {"username": self.username, "password": self.password}
+        response = self._raw_client.get_httpx_client().post(url, json=payload)
 
         if response.status_code not in (200, 201):
             raise RuntimeError(f"Login failed: {response.status_code} - {response.content}")
 
-        # Extract tokens
-        detail = response.parsed.detail
-        access_token = detail.access_token
-        id_token = detail.id_token
-        expires_in = detail.expires_in
-        
+        data = response.json()
+        detail = data.get("detail") or {}
+        access_token = detail.get("access_token")
+        id_token = detail.get("id_token")
+        expires_in = int(detail.get("expires_in", 0))
+        if not access_token:
+            raise RuntimeError("Login response missing access_token")
         expires_at = int(time.time()) + expires_in
         
         # Cache tokens (only if cache is enabled)

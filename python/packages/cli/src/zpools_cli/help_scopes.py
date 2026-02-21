@@ -55,7 +55,6 @@ SCOPES_BY_GROUP: dict[str, dict[str, str]] = {
     },
     "pat": {
         "list": "pat",
-        "create": "",
         "revoke": "pat",
     },
     "job": {
@@ -66,9 +65,8 @@ SCOPES_BY_GROUP: dict[str, dict[str, str]] = {
     "billing": {
         "balance": "billing",
         "ledger": "billing",
+        "runway": "billing",
         "summary": "billing",
-        "claim": "",
-        "start": "",
     },
     "zfs": {
         "list": "",

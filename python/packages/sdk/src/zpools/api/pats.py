@@ -1,12 +1,14 @@
 """Personal Access Token (PAT) operations."""
 
+from types import SimpleNamespace
+
 
 class PATMixin:
     """Mixin providing PAT management operations."""
     
     def create_pat(self, label: str, scopes: list = None, expiry: str = None, tenant_id: str = None):
         """
-        Create a Personal Access Token.
+        Create a Personal Access Token (direct HTTP; not in published spec).
         
         Args:
             label: Human-readable label for the PAT
@@ -17,24 +19,21 @@ class PATMixin:
         Returns:
             Response with status_code, detail.key_id, and detail.token
         """
-        from .._generated.api.personal_access_tokens import post_pat
-        from .._generated.models.post_pat_body import PostPatBody
-        
         auth_client = self._auth.get_authenticated_client()
-        
-        # Build kwargs, only including non-None values to avoid passing None to UNSET fields
-        body_kwargs = {"label": label}
+        body = {"label": label}
         if scopes is not None:
-            body_kwargs["scopes"] = scopes
+            body["scopes"] = scopes
         if expiry is not None:
-            body_kwargs["expiry"] = expiry
+            body["expiry"] = expiry if isinstance(expiry, str) else expiry.isoformat()
         if tenant_id is not None:
-            body_kwargs["tenant_id"] = tenant_id
-        
-        return post_pat.sync_detailed(
-            client=auth_client,
-            body=PostPatBody(**body_kwargs)
-        )
+            body["tenant_id"] = tenant_id
+
+        base = auth_client._base_url.rstrip("/")
+        response = auth_client.get_httpx_client().post(f"{base}/pat", json=body)
+        data = response.json() if response.content else {}
+        detail = data.get("detail") or {}
+        parsed = SimpleNamespace(detail=SimpleNamespace(key_id=detail.get("key_id"), token=detail.get("token")))
+        return SimpleNamespace(status_code=response.status_code, content=response.content, parsed=parsed)
     
     def list_pats(self):
         """

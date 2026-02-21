@@ -9,62 +9,53 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.post_login_response_200_detail import PostLoginResponse200Detail
+    from ..models.get_billing_runway_response_200_detail_runway import GetBillingRunwayResponse200DetailRunway
 
 
-T = TypeVar("T", bound="PostLoginResponse200")
+T = TypeVar("T", bound="GetBillingRunwayResponse200Detail")
 
 
 @_attrs_define
-class PostLoginResponse200:
+class GetBillingRunwayResponse200Detail:
     """
     Attributes:
-        detail (PostLoginResponse200Detail | Unset):
-        message (str | Unset):
+        runway (GetBillingRunwayResponse200DetailRunway | Unset):
     """
 
-    detail: PostLoginResponse200Detail | Unset = UNSET
-    message: str | Unset = UNSET
+    runway: GetBillingRunwayResponse200DetailRunway | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        detail: dict[str, Any] | Unset = UNSET
-        if not isinstance(self.detail, Unset):
-            detail = self.detail.to_dict()
-
-        message = self.message
+        runway: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.runway, Unset):
+            runway = self.runway.to_dict()
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({})
-        if detail is not UNSET:
-            field_dict["detail"] = detail
-        if message is not UNSET:
-            field_dict["message"] = message
+        if runway is not UNSET:
+            field_dict["runway"] = runway
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.post_login_response_200_detail import PostLoginResponse200Detail
+        from ..models.get_billing_runway_response_200_detail_runway import GetBillingRunwayResponse200DetailRunway
 
         d = dict(src_dict)
-        _detail = d.pop("detail", UNSET)
-        detail: PostLoginResponse200Detail | Unset
-        if isinstance(_detail, Unset):
-            detail = UNSET
+        _runway = d.pop("runway", UNSET)
+        runway: GetBillingRunwayResponse200DetailRunway | Unset
+        if isinstance(_runway, Unset):
+            runway = UNSET
         else:
-            detail = PostLoginResponse200Detail.from_dict(_detail)
+            runway = GetBillingRunwayResponse200DetailRunway.from_dict(_runway)
 
-        message = d.pop("message", UNSET)
-
-        post_login_response_200 = cls(
-            detail=detail,
-            message=message,
+        get_billing_runway_response_200_detail = cls(
+            runway=runway,
         )
 
-        post_login_response_200.additional_properties = d
-        return post_login_response_200
+        get_billing_runway_response_200_detail.additional_properties = d
+        return get_billing_runway_response_200_detail
 
     @property
     def additional_keys(self) -> list[str]:

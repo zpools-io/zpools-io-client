@@ -6,12 +6,9 @@ from zpools_cli.utils import format_error_response, format_usd, format_timestamp
 from zpools._generated.api.billing import (
     get_billing_balance,
     get_billing_ledger,
+    get_billing_runway,
     get_billing_summary,
-    post_codes_claim,
-    post_dodo_start
 )
-from zpools._generated.models.post_codes_claim_body import PostCodesClaimBody
-from zpools._generated.models.post_dodo_start_body import PostDodoStartBody
 from zpools._generated.types import UNSET
 from zpools_cli.help_scopes import ScopedGroup
 import datetime
@@ -87,6 +84,14 @@ def get_ledger(
             except ValueError:
                 console.print("[red]Invalid date format for --until. Use YYYY-MM-DD[/red]")
                 return
+
+        today = datetime.date.today()
+        if since_date is not None and since_date > today:
+            console.print("[red]--since must not be a future date.[/red]")
+            return
+        if until_date is not None and until_date > today:
+            console.print("[red]--until must not be a future date.[/red]")
+            return
 
         # Build kwargs for API call (API returns newest-first)
         kwargs = {}
@@ -189,6 +194,14 @@ def get_summary(
                 console.print("[red]Invalid date format for --until. Use YYYY-MM-DD[/red]")
                 return
 
+        today = datetime.date.today()
+        if since_date is not None and since_date > today:
+            console.print("[red]--since must not be a future date.[/red]")
+            return
+        if until_date is not None and until_date > today:
+            console.print("[red]--until must not be a future date.[/red]")
+            return
+
         # Build kwargs for API call
         kwargs = {}
         if since_date:
@@ -256,25 +269,27 @@ def get_summary(
                     )
                 console.print(table)
 
-            # Time-of-Use Charges
-            tou_charges = summary.time_of_use_charges if summary.time_of_use_charges is not UNSET else []
-            if tou_charges:
-                table = Table(title="Time-of-Use Charges")
-                table.add_column("Time", style="blue")
-                table.add_column("Source", style="cyan")
-                table.add_column("Zpool ID", style="yellow")
-                table.add_column("Amount", style="red")
-                table.add_column("Note", style="white")
-
-                for charge in tou_charges:
-                    posted_ts = charge.posted_ts if charge.posted_ts is not UNSET else ""
-                    source = charge.source if charge.source is not UNSET else ""
-                    zpool_id = charge.zpool_id if charge.zpool_id is not UNSET else ""
-                    amount = charge.amount_usd if charge.amount_usd is not UNSET else 0
-                    note = charge.note if charge.note is not UNSET else ""
-
-                    table.add_row(format_timestamp(posted_ts, use_local_tz), source, zpool_id, f"${format_usd(amount)}", note)
-                console.print(table)
+            # Time-of-Use summary (aggregated; use billing ledger for per-entry detail)
+            tou_summary = summary.time_of_use_summary if summary.time_of_use_summary is not UNSET else None
+            if tou_summary and tou_summary.by_source is not UNSET:
+                by_src = tou_summary.by_source
+                zero_egress = tou_summary.zero_egress_count if tou_summary.zero_egress_count is not UNSET else 0
+                keys = sorted(by_src.additional_properties.keys()) if by_src.additional_properties else []
+                if keys:
+                    table = Table(title="Time-of-Use (summary)")
+                    table.add_column("Source", style="cyan")
+                    table.add_column("Count", style="blue")
+                    table.add_column("Total (USD)", style="red")
+                    table.add_column("Zero count", style="dim")
+                    for src in keys:
+                        data = by_src[src]
+                        count = data.count if data.count is not UNSET else 0
+                        total_usd = data.total_usd if data.total_usd is not UNSET else 0
+                        zc = data.zero_count if data.zero_count is not UNSET else 0
+                        table.add_row(src, str(count), f"${format_usd(total_usd)}", str(zc))
+                    console.print(table)
+                    if zero_egress:
+                        console.print(f"  [dim]Zero-egress entries: {zero_egress}[/dim]")
 
             # Credits (attribute is credits_ due to Python reserved word)
             credits_list = summary.credits_ if summary.credits_ is not UNSET else []
@@ -329,72 +344,57 @@ def get_summary(
         console.print(f"[red]An error occurred:[/red] {e}")
 
 
-@app.command("claim")
-def claim_code(
+@app.command("runway")
+def get_runway(
     ctx: typer.Context,
-    code: str = typer.Argument(..., help="Credit code to redeem"),
-    json_output: bool = typer.Option(False, "--json", help="Output raw JSON")
+    lookback_days: int = typer.Option(30, "--lookback", "--lookback-days", help="Days of ToU history for adjusted runway (1–90)"),
+    json_output: bool = typer.Option(False, "--json", help="Output raw JSON"),
 ):
-    """Redeem a credit code."""
+    """Show burn rate and days remaining (EBS-only and time-of-use adjusted)."""
     try:
         from zpools_cli.utils import get_authenticated_client
         client = get_authenticated_client(ctx.obj)
         auth_client = client.get_authenticated_client()
-        
-        body = PostCodesClaimBody(code=code)
-        
-        response = post_codes_claim.sync_detailed(client=auth_client, body=body)
-        
-        if response.status_code == 201:
+
+        if lookback_days < 1 or lookback_days > 90:
+            console.print("[red]--lookback-days must be between 1 and 90.[/red]")
+            return
+
+        response = get_billing_runway.sync_detailed(client=auth_client, lookback_days=lookback_days)
+
+        if response.status_code == 200:
             if json_output:
                 print(json.dumps(response.parsed.to_dict(), indent=2, default=str))
                 return
-            
-            detail = response.parsed.detail
-            amount = detail.amount_cents if detail.amount_cents is not UNSET else 0
-            console.print(f"[green]Code redeemed successfully![/green]")
-            console.print(f"Added: ${format_usd(amount / 100)}")
-            # New balance is not returned in this response model, user can check balance separately
-        else:
-            error_msg = format_error_response(response.status_code, response.content, json_output)
-            if json_output:
-                print(error_msg)
+
+            runway = response.parsed.detail.runway if response.parsed.detail.runway is not UNSET else None
+            if not runway:
+                console.print("[yellow]Runway data unavailable.[/yellow]")
+                return
+
+            balance = runway.ending_balance if runway.ending_balance is not UNSET else None
+            console.print(f"\n[bold]Current balance[/bold]  ${format_usd(balance) if balance is not None else '-'}\n")
+
+            days_ebs = runway.days_remaining_ebs if runway.days_remaining_ebs is not UNSET else None
+            burn_ebs = runway.daily_burn_ebs if runway.daily_burn_ebs is not UNSET else None
+            if days_ebs is not None and burn_ebs is not None:
+                console.print("[bold]EBS-only runway[/bold]  (current storage allocation)")
+                console.print(f"  ~{float(days_ebs):.1f} days  (daily burn: ${format_usd(burn_ebs)})")
             else:
-                console.print(f"[red]Error {response.status_code}:[/red] {error_msg}")
+                console.print("[bold]EBS-only runway[/bold]  — (no active storage allocation)")
 
-    except Exception as e:
-        console.print(f"[red]An error occurred:[/red] {e}")
-
-@app.command("start")
-def start_payment(
-    ctx: typer.Context,
-    amount: int = typer.Argument(..., help="Amount in dollars to add (minimum $1)"),
-    json_output: bool = typer.Option(False, "--json", help="Output raw JSON")
-):
-    """Start a payment session to add credits."""
-    try:
-        from zpools_cli.utils import get_authenticated_client
-        client = get_authenticated_client(ctx.obj)
-        auth_client = client.get_authenticated_client()
-        
-        # Validate amount (API requires minimum $1)
-        if amount < 1:
-             console.print("[yellow]Amount must be at least $1[/yellow]")
-             return
-
-        body = PostDodoStartBody(quantity=amount)
-        
-        response = post_dodo_start.sync_detailed(client=auth_client, body=body)
-        
-        if response.status_code == 201:
-            if json_output:
-                print(json.dumps(response.parsed.to_dict(), indent=2, default=str))
-                return
-            
-            url = response.parsed.detail.payment_link
-            console.print(f"[green]Payment session started![/green]")
-            console.print(f"Please visit this URL to complete payment:")
-            console.print(f"[link={url}]{url}[/link]")
+            lookback = runway.lookback_days if runway.lookback_days is not UNSET else lookback_days
+            days_adj = runway.days_remaining_adjusted if runway.days_remaining_adjusted is not UNSET else None
+            burn_tou = runway.daily_tou_avg if runway.daily_tou_avg is not UNSET else None
+            burn_total = runway.daily_burn_total if runway.daily_burn_total is not UNSET else None
+            if days_adj is not None and burn_total is not None:
+                console.print(f"\n[bold]Runway (incl. time-of-use)[/bold]  (last {lookback} days)")
+                console.print(f"  ~{float(days_adj):.1f} days  (combined daily burn: ${format_usd(burn_total)})")
+                if burn_tou is not None:
+                    console.print(f"  [dim]ToU avg: ${format_usd(burn_tou)}/day[/dim]")
+            else:
+                tou_total = runway.tou_total_in_lookback if runway.tou_total_in_lookback is not UNSET else None
+                console.print(f"\n[bold]Runway (incl. time-of-use)[/bold]  — (ToU in period: ${format_usd(tou_total) if tou_total is not None else '-'})")
         else:
             error_msg = format_error_response(response.status_code, response.content, json_output)
             if json_output:

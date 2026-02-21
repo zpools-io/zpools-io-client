@@ -9,21 +9,21 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.post_dodo_start_response_201_detail import PostDodoStartResponse201Detail
+    from ..models.get_billing_runway_response_200_detail import GetBillingRunwayResponse200Detail
 
 
-T = TypeVar("T", bound="PostDodoStartResponse201")
+T = TypeVar("T", bound="GetBillingRunwayResponse200")
 
 
 @_attrs_define
-class PostDodoStartResponse201:
+class GetBillingRunwayResponse200:
     """
     Attributes:
-        detail (PostDodoStartResponse201Detail | Unset):
+        detail (GetBillingRunwayResponse200Detail | Unset):
         message (str | Unset):
     """
 
-    detail: PostDodoStartResponse201Detail | Unset = UNSET
+    detail: GetBillingRunwayResponse200Detail | Unset = UNSET
     message: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -46,25 +46,25 @@ class PostDodoStartResponse201:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.post_dodo_start_response_201_detail import PostDodoStartResponse201Detail
+        from ..models.get_billing_runway_response_200_detail import GetBillingRunwayResponse200Detail
 
         d = dict(src_dict)
         _detail = d.pop("detail", UNSET)
-        detail: PostDodoStartResponse201Detail | Unset
+        detail: GetBillingRunwayResponse200Detail | Unset
         if isinstance(_detail, Unset):
             detail = UNSET
         else:
-            detail = PostDodoStartResponse201Detail.from_dict(_detail)
+            detail = GetBillingRunwayResponse200Detail.from_dict(_detail)
 
         message = d.pop("message", UNSET)
 
-        post_dodo_start_response_201 = cls(
+        get_billing_runway_response_200 = cls(
             detail=detail,
             message=message,
         )
 
-        post_dodo_start_response_201.additional_properties = d
-        return post_dodo_start_response_201
+        get_billing_runway_response_200.additional_properties = d
+        return get_billing_runway_response_200
 
     @property
     def additional_keys(self) -> list[str]:

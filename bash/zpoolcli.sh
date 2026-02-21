@@ -1,9 +1,8 @@
 #!/bin/bash
 # zpoolcli.sh — PAT-first where supported; JWT where required; SSH for ZFS.
-# Clean command structure:
-#   - claim <code>                 (JWT access)
-#   - billing balance|ledger|start (JWT access; /dodo/start kept server-side)
-#   - job, pat, sshkey, zpool      (JWTPAT or JWT as appropriate)
+# Command structure:
+#   - billing balance|ledger       (PAT/JWT; claim codes and add credits on dashboard)
+#   - job, pat, sshkey, zpool      (PAT or JWT as appropriate; create PATs on dashboard)
 #   - zfs                          (SSH)
 
 set -eo pipefail
@@ -103,18 +102,15 @@ usage() {
   echo
   echo "Commands (left column shows auth type; PAT-capable lines include required PAT scope):"
   echo
-  echo "  === Identity & Codes ==="
-  echo "  [JWT]     $0 claim <code>"
-  echo
   echo "  === Billing ==="
-  echo "  [JWT]     $0 billing balance"
-  echo "  [JWT]     $0 billing ledger [since YYYY-MM-DD] [until YYYY-MM-DD] [limit (default 500)]"
-  echo "  [JWT]     $0 billing start <amount_dollars>"
+  echo "  [JWTPAT]  $0 billing balance                           (scope: billing)"
+  echo "  [JWTPAT]  $0 billing ledger [since YYYY-MM-DD] [until YYYY-MM-DD] [limit (default 500)]"
+  echo "  (Redeem codes and add credits on the dashboard.)"
   echo
   echo "  === Personal Access Tokens ==="
   echo "  [JWTPAT]  $0 pat list                                  (scope: pat)"
-  echo "  [JWT]     $0 pat create <label> [<soft-expiry YYYY-MM-DD>] [<tenant_id>] [scope1] [scope2] ..."
-  echo "  [JWT]     $0 pat revoke <key_id>"
+  echo "  [JWTPAT]  $0 pat revoke <key_id>"
+  echo "  (Create PATs on the dashboard.)"
   echo
   echo "  === SSH Keys ==="
   echo "  [JWTPAT]  $0 sshkey list                               (scope: sshkey)"
@@ -383,128 +379,16 @@ billing_operations() {
       fi
       api_jwt_access GET "/billing/ledger${query}"
       ;;
-    start)
-      # billing start <amount_dollars>
-      [[ -n "${2:-}" ]] || die "Missing amount for billing start. Usage: $0 billing start <amount_dollars>"
-      local amount_dollars="$2"
-      # REST API unchanged: still POST /dodo/start with 'quantity'
-      local payload
-      payload="$(jq -n --argjson q "$amount_dollars" '{quantity:$q}')"
-      api_jwt_access POST "/dodo/start" "$payload"
-      ;;
     usage|help|--help|-h|*)
       echo
       echo "Billing commands:"
       echo "  $0 billing balance"
       echo "  $0 billing ledger [since YYYY-MM-DD] [until YYYY-MM-DD] [limit]"
-      echo "  $0 billing start <amount_dollars>"
+      echo "  (Redeem codes and add credits on the dashboard.)"
       echo
       exit 1
       ;;
   esac
-}
-
-claim_operation() {
-  # claim <code>
-  [[ -n "${1:-}" ]] || die "Missing code for claim."
-  local claim_code="$1"
-
-  _open_url() {
-    local url="$1"
-    if command -v xdg-open >/dev/null 2>&1; then xdg-open "$url" >/dev/null 2>&1 || true
-    elif command -v open >/dev/null 2>&1; then open "$url" >/dev/null 2>&1 || true
-    elif command -v start >/dev/null 2>&1; then start "$url" >/dev/null 2>&1 || true
-    else
-      note "No system opener found (xdg-open/open/start)."
-      return 1
-    fi
-  }
-
-  _copy_url() {
-    local url="$1"
-    if command -v pbcopy >/dev/null 2>&1; then printf %s "$url" | pbcopy && note "URL copied to clipboard (pbcopy)." && return 0; fi
-    if command -v xclip  >/dev/null 2>&1; then printf %s "$url" | xclip -selection clipboard && note "URL copied to clipboard (xclip)." && return 0; fi
-    if command -v xsel   >/dev/null 2>&1; then printf %s "$url" | xsel --clipboard --input && note "URL copied to clipboard (xsel)." && return 0; fi
-    if command -v clip.exe >/dev/null 2>&1; then printf %s "$url" | clip.exe && note "URL copied to clipboard (clip.exe)." && return 0; fi
-    note "No clipboard tool found (pbcopy/xclip/xsel/clip.exe)."
-    return 1
-  }
-
-  _view_in_pager() {
-    local url="$1"
-    local pager="${PAGER:-}"
-    if [[ -z "$pager" ]]; then
-      if command -v less >/dev/null 2>&1; then pager="less -R"
-      elif command -v more >/dev/null 2>&1; then pager="more"
-      else pager="cat"
-      fi
-    fi
-    curl -fsSL "$url" | eval "$pager"
-  }
-
-  ensure_jwt_fresh
-  local payload; payload="$(jq -n --arg c "$claim_code" '{code:$c}')"
-  do_http POST "/codes/claim" "Authorization: Bearer $(bearer access)" "$payload"
-
-  if [[ "$HTTP_STATUS" =~ ^2[0-9][0-9]$ ]]; then
-    emit_json "$RESPONSE"
-    return 0
-  fi
-
-  if [[ "$HTTP_STATUS" == "428" ]]; then
-    is_tty || die "Interactive TTY required to accept Terms. Re-run in a terminal."
-    local tos_url
-    tos_url="$(jq -r '.detail.tos_url // empty' <<<"$RESPONSE")"
-    [[ -n "$tos_url" ]] || { emit_json "$RESPONSE"; die "Server did not provide tos_url."; }
-
-    echo
-    echo "This code requires accepting Terms of Service."
-    echo "URL: $tos_url"
-    echo
-    echo "Choose an action:"
-    echo "  [O] Open in your default browser"
-    echo "  [V] View in this terminal (pager)"
-    echo "  [C] Copy URL to clipboard"
-    echo "  [P] Print URL again"
-    echo
-
-    while true; do
-      read -r -p "Select action (O/V/C/P), or press Enter to continue to acceptance prompt: " act
-      case "$(tr '[:lower:]' '[:upper:]' <<<"${act}")" in
-        O) _open_url "$tos_url" || true ;;
-        V) _view_in_pager "$tos_url" ;;
-        C) _copy_url "$tos_url" || true ;;
-        P) echo "URL: $tos_url" ;;
-        "") break ;;
-        *) echo "Unknown choice. Use O/V/C/P or Enter." ;;
-      esac
-    done
-
-    echo
-    read -r -p "Type YES to accept the Terms exactly as published at the URL above: " ack
-    if [[ "$ack" != "YES" ]]; then
-      die "Terms not accepted."
-    fi
-
-    local accepted_at
-    accepted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    local commit_payload
-    commit_payload="$(
-      jq -n \
-        --arg c "$claim_code" \
-        --arg u "$tos_url" \
-        --arg t "$accepted_at" \
-        '{code:$c, tos:{url:$u, accepted_at:$t}}'
-    )"
-
-    do_http POST "/codes/claim" "Authorization: Bearer $(bearer access)" "$commit_payload"
-    emit_json "$RESPONSE"
-    [[ "$HTTP_STATUS" =~ ^2[0-9][0-9]$ ]] || exit 1
-    return 0
-  fi
-
-  emit_json "$RESPONSE"
-  exit 1
 }
 
 job_operations() {
@@ -537,36 +421,6 @@ pat_operations() {
     list)
       api_pat_or_jwt_access GET "/pat"
       ;;
-    create)
-      [[ -n "${2:-}" ]] || die "Missing <label> for pat create."
-      local label="$2"
-      local expiry="${3:-}"
-      local tenant_id="${4:-}"
-      local scopes_json=""
-      if [[ $# -ge 5 ]]; then
-        scopes_json="$(printf '%s\n' "${@:5}" | jq -R . | jq -s .)"
-      fi
-      local payload
-      if [[ -n "$scopes_json" ]]; then
-        payload="$(
-          jq -n --arg lbl "$label" --arg expiry "$expiry" --arg tenant "$tenant_id" --argjson scopes "$scopes_json" '
-            {"label": $lbl}
-            + (if ($expiry|length)>0 then {"expiry": $expiry} else {} end)
-            + (if ($tenant|length)>0 then {"tenant_id": $tenant} else {} end)
-            + (if ($scopes|length)>0 then {"scopes": $scopes} else {} end)
-          '
-        )"
-      else
-        payload="$(
-          jq -n --arg lbl "$label" --arg expiry "$expiry" --arg tenant "$tenant_id" '
-            {"label": $lbl}
-            + (if ($expiry|length)>0 then {"expiry": $expiry} else {} end)
-            + (if ($tenant|length)>0 then {"tenant_id": $tenant} else {} end)
-          '
-        )"
-      fi
-      api_jwt_access POST "/pat" "$payload"
-      ;;
     revoke)
       [[ -n "${2:-}" ]] || die "Missing <key_id> for pat revoke."
       api_jwt_access DELETE "/pat/$2"
@@ -575,8 +429,8 @@ pat_operations() {
       echo
       echo "PAT:"
       echo "  $0 pat list"
-      echo "  $0 pat create <label> [<soft-expiry YYYY-MM-DD>] [<tenant_id>] [scope1] [scope2] ..."
       echo "  $0 pat revoke <key_id>"
+      echo "  (Create PATs on the dashboard.)"
       echo
       exit 1
       ;;
@@ -710,10 +564,6 @@ case "$1" in
     shift
     [[ -n "${1:-}" ]] || { echo "Error: Missing operation for billing." >&2; billing_operations usage; }
     billing_operations "$@"
-    ;;
-  claim)
-    shift
-    claim_operation "$@"
     ;;
   hello)
     api_pat_or_jwt_access GET "/hello"

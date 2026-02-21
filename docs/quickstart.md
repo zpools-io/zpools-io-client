@@ -27,27 +27,20 @@ zpcli version
 
 ## 3. Configure
 
-Configuration is stored in an rcfile at `~/.config/zpools.io/zpoolrc` (or a path you pass with `--rcfile`). For the full set of options and overrides, see [Configuration](configuration.md).
+Configuration is stored in an rcfile at `~/.config/zpools.io/zpoolrc` (or a path you pass with `--rcfile`). The CLI uses a **Personal Access Token (PAT)** only. For the full set of options, see [Configuration](configuration.md).
 
-**Easiest:** Run a command that needs config (e.g. `zpcli hello`). If no config file exists at the default path, the CLI will ask: *"It doesn't look like you've got a config file. Would you like to make one now?"* It will then prompt for your zpools.io username (required), optional token cache directory (no cache by default), and SSH key: you can **create a new key** (default; the wizard shows the `ssh-keygen` command to run—tune it to your preferences—then asks for the path to the key you created, default `~/.ssh/id_zpool_ed25519`, and validates that both private and public key exist before saving) or **use an existing key** (enumerated from `~/.ssh` or type a path). The wizard writes the file and adds commented optional overrides you can edit later.
+**Easiest:** Run `zpcli login`. The wizard will open the dashboard so you can sign in and create a PAT, then you paste the token into the CLI. It will also prompt for API URL (default `https://api.zpools.io/v1`), label, scopes, expiry, and SSH key (create new or use existing). The wizard writes the rcfile. Alternatively, run a command that needs config (e.g. `zpcli hello`); if you have no config or no PAT, the same wizard runs.
 
-**Manual:** Create the directory and rcfile yourself. Replace `your-username` with the username from step 1:
+**Manual:** Create a PAT on the website (Dashboard → Tokens), then create the rcfile with your PAT and SSH key path:
 
 ```bash
 mkdir -p ~/.config/zpools.io
-printf '%s\n' 'ZPOOL_USER=your-username' > ~/.config/zpools.io/zpoolrc
+printf '%s\n' 'ZPOOLPAT=zpat_xxxxxxxxxxxxxxxxxxxxxxxx' 'SSH_PRIVKEY_FILE=~/.ssh/id_ed25519' > ~/.config/zpools.io/zpoolrc
 ```
 
-Password cannot be set in the rcfile; you will be prompted when needed, or set `ZPOOL_PASSWORD` in the environment. For non-interactive use, use a [Personal Access Token](authentication.md#pat) (`ZPOOLPAT`).
+**ZFS over SSH** (required for steps 7–10): If you did not set an SSH key in the wizard, edit the rcfile and set your SSH private key path (and optionally `SSH_HOST`; it defaults to `ssh.zpools.io`).
 
-**ZFS over SSH** (required for steps 7–10): If you did not set an SSH key in the wizard, edit the rcfile and set your SSH private key path (and optionally `SSH_HOST`; it defaults to `ssh.zpools.io`), for example:
-
-```bash
-# SSH_PRIVKEY_FILE=~/.ssh/id_ed25519
-# SSH_HOST=ssh.zpools.io
-```
-
-Verify connectivity and auth (you may be prompted for your password):
+Verify connectivity and auth:
 
 ```bash
 zpcli hello
@@ -59,20 +52,13 @@ zpcli hello
 
 > **Beta:** During beta, a **beta invite code** is required to activate your account. Check [Discord](https://zpools.io/discord) for beta access and support. This step will not be required after general availability.
 
-When you have a code, assign it to a variable and claim it (you may be prompted for your password):
-
-```bash
-CODE=YOUR_CODE
-test -n "$CODE" && zpcli billing claim "$CODE"
-```
-
-Replace `YOUR_CODE` with your actual code before running.
+Redeem your code on the **dashboard Billing page**. Sign in at [zpools.io](https://zpools.io), go to Dashboard → Billing, and use the claim section to enter your code.
 
 ---
 
 ## 5. SSH key upload
 
-Upload the public key you set in the config wizard (or in your rcfile as `SSH_PRIVKEY_FILE`) so the service can use it for ZFS over SSH. You may be prompted for your password. Use the path from your rcfile; the public key is the same path with `.pub` appended.
+Upload the public key you set in the config wizard (or in your rcfile as `SSH_PRIVKEY_FILE`) so the service can use it for ZFS over SSH. Use the path from your rcfile; the public key is the same path with `.pub` appended.
 
 ```bash
 KEY_PATH=$(grep -E '^SSH_PRIVKEY_FILE=' ~/.config/zpools.io/zpoolrc | cut -d= -f2- | tr -d '"')

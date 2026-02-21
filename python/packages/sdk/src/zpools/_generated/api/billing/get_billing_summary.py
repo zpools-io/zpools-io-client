@@ -72,8 +72,10 @@ def sync_detailed(
 ) -> Response[Any | GetBillingSummaryResponse200]:
     """Get billing summary
 
-     Retrieve aggregated billing summary grouped by zpool and rate period. Groups hourly storage charges
-    into periods, lists time-of-use charges (scrub jobs, egress) separately, and calculates totals.
+     Retrieve aggregated billing summary for a date range (max 32 days). When since/until omitted,
+    returns the preceding calendar month. Groups hourly storage charges into periods, includes
+    time_of_use_summary (by source, non-zero charges, zero egress count), and calculates totals. For
+    longer ranges use the ledger API.
 
     Args:
         since (datetime.date | Unset):
@@ -107,8 +109,10 @@ def sync(
 ) -> Any | GetBillingSummaryResponse200 | None:
     """Get billing summary
 
-     Retrieve aggregated billing summary grouped by zpool and rate period. Groups hourly storage charges
-    into periods, lists time-of-use charges (scrub jobs, egress) separately, and calculates totals.
+     Retrieve aggregated billing summary for a date range (max 32 days). When since/until omitted,
+    returns the preceding calendar month. Groups hourly storage charges into periods, includes
+    time_of_use_summary (by source, non-zero charges, zero egress count), and calculates totals. For
+    longer ranges use the ledger API.
 
     Args:
         since (datetime.date | Unset):
@@ -137,8 +141,10 @@ async def asyncio_detailed(
 ) -> Response[Any | GetBillingSummaryResponse200]:
     """Get billing summary
 
-     Retrieve aggregated billing summary grouped by zpool and rate period. Groups hourly storage charges
-    into periods, lists time-of-use charges (scrub jobs, egress) separately, and calculates totals.
+     Retrieve aggregated billing summary for a date range (max 32 days). When since/until omitted,
+    returns the preceding calendar month. Groups hourly storage charges into periods, includes
+    time_of_use_summary (by source, non-zero charges, zero egress count), and calculates totals. For
+    longer ranges use the ledger API.
 
     Args:
         since (datetime.date | Unset):
@@ -170,8 +176,10 @@ async def asyncio(
 ) -> Any | GetBillingSummaryResponse200 | None:
     """Get billing summary
 
-     Retrieve aggregated billing summary grouped by zpool and rate period. Groups hourly storage charges
-    into periods, lists time-of-use charges (scrub jobs, egress) separately, and calculates totals.
+     Retrieve aggregated billing summary for a date range (max 32 days). When since/until omitted,
+    returns the preceding calendar month. Groups hourly storage charges into periods, includes
+    time_of_use_summary (by source, non-zero charges, zero egress count), and calculates totals. For
+    longer ranges use the ledger API.
 
     Args:
         since (datetime.date | Unset):

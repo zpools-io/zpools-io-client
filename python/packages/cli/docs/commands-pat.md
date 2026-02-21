@@ -2,14 +2,13 @@
 
 `zpcli pat` — Manage Personal Access Tokens (PATs) via the CLI.
 
-For PAT concepts, scopes, and when to use PATs vs JWT, see [Authentication](../../../../docs/authentication.md#pat). PAT key IDs use the standard [Resource IDs](../../../../docs/reference/ids.md) format.
+For PAT concepts and scopes, see [Authentication](../../../../docs/authentication.md#pat). PAT key IDs use the standard [Resource IDs](../../../../docs/reference/ids.md) format.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `zpcli pat list` | List your PATs |
-| `zpcli pat create <label>` | Create a new PAT (requires JWT auth) |
 | `zpcli pat revoke <key_id>` | Revoke a PAT |
 
 ---
@@ -47,57 +46,6 @@ Lists all PATs for the authenticated user. The token secret is never shown after
 zpcli pat list
 zpcli pat list --local
 zpcli pat list --json
-```
-
----
-
-## create
-
-```text
-zpcli pat create <label> [OPTIONS]
-```
-
-Creates a new PAT. Requires JWT authentication (username/password); PATs cannot create other PATs unless they have the `pat` scope.
-
-The token value is printed **only once**—copy it immediately and store it securely (e.g. secret manager, CI variable). Do not commit PATs to version control.
-
-**Argument**
-
-| Argument | Description |
-|----------|-------------|
-| `label` | Human-readable name (e.g. `"GitHub Actions"`). Quote if it contains spaces. |
-
-**Options**
-
-| Option | Description |
-|--------|-------------|
-| `--scope <scope>` | Scope to grant. **Required.** Repeat for multiple scopes. See [Scopes](../../../../docs/authentication.md#scopes). |
-| `--expiry <YYYY-MM-DD>` | Optional expiry date. Omit for no expiry. |
-| `--tenant-id <id>` | Optional tenant ID (multi-tenant scenarios). |
-| `--json` | Output raw JSON. |
-
-**Examples**
-
-```text
-# Full access (quote * to prevent shell globbing)
-zpcli pat create "My CI Token" --scope '*'
-
-# Least privilege: only zpool and job access
-zpcli pat create "CI zpool only" --scope zpool --scope job
-
-# With expiry
-zpcli pat create "Temp token" --scope sshkey --expiry 2025-12-31
-```
-
-**Output**
-
-On success, the CLI prints the key ID and token value. Copy the token immediately.
-
-```text
-PAT created successfully!
-ID: law-hotel-shape-community
-Token: zpat_xxxxxxxxxxxxxxxxxxxxxxxx
-Make sure to copy your token now. You won't be able to see it again!
 ```
 
 ---

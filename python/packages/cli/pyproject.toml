@@ -1,6 +1,6 @@
 [project]
 name = "zpools-cli"
-version = "1.0.0"
+version = "2.0.0"
 description = "Command line interface for zpools.io"
 readme = "README.md"
 requires-python = ">=3.9"

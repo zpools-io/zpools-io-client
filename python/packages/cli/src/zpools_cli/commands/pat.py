@@ -1,6 +1,5 @@
 import typer
 import json
-import datetime
 from rich.console import Console
 from rich.table import Table
 from zpools_cli.utils import get_authenticated_client, format_error_response, format_timestamp
@@ -69,53 +68,6 @@ def list_pats(
     except Exception as e:
         console.print(f"[red]An error occurred:[/red] {e}")
 
-@app.command("create")
-def create_pat(
-    ctx: typer.Context,
-    label: str = typer.Argument(..., help="Label for the new token"),
-    expiry: str = typer.Option(None, "--expiry", help="Optional expiry date (YYYY-MM-DD)"),
-    tenant_id: str = typer.Option(None, "--tenant-id", help="Optional tenant ID"),
-    scopes: list[str] = typer.Option(None, "--scope", help="Optional scopes (can be specified multiple times)"),
-    json_output: bool = typer.Option(False, "--json", help="Output raw JSON")
-):
-    """Create a new Personal Access Token."""
-    try:
-        client = get_authenticated_client(ctx.obj)
-        
-        # Validate expiry format if provided
-        expiry_date = None
-        if expiry:
-            try:
-                expiry_date = datetime.datetime.strptime(expiry, "%Y-%m-%d").date().isoformat()
-            except ValueError:
-                console.print("[red]Invalid expiry date format. Use YYYY-MM-DD[/red]")
-                raise typer.Exit(1)
-        
-        response = client.create_pat(
-            label=label,
-            expiry=expiry_date,
-            tenant_id=tenant_id,
-            scopes=scopes
-        )
-        
-        if response.status_code == 201:
-            if json_output:
-                print(json.dumps(response.parsed.to_dict(), indent=2, default=str))
-                return
-            
-            console.print(f"[green]PAT created successfully![/green]")
-            console.print(f"ID: {response.parsed.detail.key_id}")
-            console.print(f"Token: [bold]{response.parsed.detail.token}[/bold]")
-            console.print("[yellow]Make sure to copy your token now. You won't be able to see it again![/yellow]")
-        else:
-            error_msg = format_error_response(response.status_code, response.content, json_output)
-            if json_output:
-                print(error_msg)
-            else:
-                console.print(f"[red]Error {response.status_code}:[/red] {error_msg}")
-
-    except Exception as e:
-        console.print(f"[red]An error occurred:[/red] {e}")
 
 @app.command("revoke")
 def revoke_pat(

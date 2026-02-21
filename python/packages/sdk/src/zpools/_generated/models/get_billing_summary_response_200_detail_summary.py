@@ -18,8 +18,8 @@ if TYPE_CHECKING:
     from ..models.get_billing_summary_response_200_detail_summary_storage_charges_item import (
         GetBillingSummaryResponse200DetailSummaryStorageChargesItem,
     )
-    from ..models.get_billing_summary_response_200_detail_summary_time_of_use_charges_item import (
-        GetBillingSummaryResponse200DetailSummaryTimeOfUseChargesItem,
+    from ..models.get_billing_summary_response_200_detail_summary_time_of_use_summary import (
+        GetBillingSummaryResponse200DetailSummaryTimeOfUseSummary,
     )
     from ..models.get_billing_summary_response_200_detail_summary_totals import (
         GetBillingSummaryResponse200DetailSummaryTotals,
@@ -36,14 +36,15 @@ class GetBillingSummaryResponse200DetailSummary:
         credits_ (list[GetBillingSummaryResponse200DetailSummaryCreditsItem] | Unset):
         period (GetBillingSummaryResponse200DetailSummaryPeriod | Unset):
         storage_charges (list[GetBillingSummaryResponse200DetailSummaryStorageChargesItem] | Unset):
-        time_of_use_charges (list[GetBillingSummaryResponse200DetailSummaryTimeOfUseChargesItem] | Unset):
+        time_of_use_summary (GetBillingSummaryResponse200DetailSummaryTimeOfUseSummary | Unset): Time-of-use summary
+            only (use ledger endpoint for per-entry detail)
         totals (GetBillingSummaryResponse200DetailSummaryTotals | Unset):
     """
 
     credits_: list[GetBillingSummaryResponse200DetailSummaryCreditsItem] | Unset = UNSET
     period: GetBillingSummaryResponse200DetailSummaryPeriod | Unset = UNSET
     storage_charges: list[GetBillingSummaryResponse200DetailSummaryStorageChargesItem] | Unset = UNSET
-    time_of_use_charges: list[GetBillingSummaryResponse200DetailSummaryTimeOfUseChargesItem] | Unset = UNSET
+    time_of_use_summary: GetBillingSummaryResponse200DetailSummaryTimeOfUseSummary | Unset = UNSET
     totals: GetBillingSummaryResponse200DetailSummaryTotals | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -66,12 +67,9 @@ class GetBillingSummaryResponse200DetailSummary:
                 storage_charges_item = storage_charges_item_data.to_dict()
                 storage_charges.append(storage_charges_item)
 
-        time_of_use_charges: list[dict[str, Any]] | Unset = UNSET
-        if not isinstance(self.time_of_use_charges, Unset):
-            time_of_use_charges = []
-            for time_of_use_charges_item_data in self.time_of_use_charges:
-                time_of_use_charges_item = time_of_use_charges_item_data.to_dict()
-                time_of_use_charges.append(time_of_use_charges_item)
+        time_of_use_summary: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.time_of_use_summary, Unset):
+            time_of_use_summary = self.time_of_use_summary.to_dict()
 
         totals: dict[str, Any] | Unset = UNSET
         if not isinstance(self.totals, Unset):
@@ -86,8 +84,8 @@ class GetBillingSummaryResponse200DetailSummary:
             field_dict["period"] = period
         if storage_charges is not UNSET:
             field_dict["storage_charges"] = storage_charges
-        if time_of_use_charges is not UNSET:
-            field_dict["time_of_use_charges"] = time_of_use_charges
+        if time_of_use_summary is not UNSET:
+            field_dict["time_of_use_summary"] = time_of_use_summary
         if totals is not UNSET:
             field_dict["totals"] = totals
 
@@ -104,8 +102,8 @@ class GetBillingSummaryResponse200DetailSummary:
         from ..models.get_billing_summary_response_200_detail_summary_storage_charges_item import (
             GetBillingSummaryResponse200DetailSummaryStorageChargesItem,
         )
-        from ..models.get_billing_summary_response_200_detail_summary_time_of_use_charges_item import (
-            GetBillingSummaryResponse200DetailSummaryTimeOfUseChargesItem,
+        from ..models.get_billing_summary_response_200_detail_summary_time_of_use_summary import (
+            GetBillingSummaryResponse200DetailSummaryTimeOfUseSummary,
         )
         from ..models.get_billing_summary_response_200_detail_summary_totals import (
             GetBillingSummaryResponse200DetailSummaryTotals,
@@ -139,16 +137,14 @@ class GetBillingSummaryResponse200DetailSummary:
 
                 storage_charges.append(storage_charges_item)
 
-        _time_of_use_charges = d.pop("time_of_use_charges", UNSET)
-        time_of_use_charges: list[GetBillingSummaryResponse200DetailSummaryTimeOfUseChargesItem] | Unset = UNSET
-        if _time_of_use_charges is not UNSET:
-            time_of_use_charges = []
-            for time_of_use_charges_item_data in _time_of_use_charges:
-                time_of_use_charges_item = GetBillingSummaryResponse200DetailSummaryTimeOfUseChargesItem.from_dict(
-                    time_of_use_charges_item_data
-                )
-
-                time_of_use_charges.append(time_of_use_charges_item)
+        _time_of_use_summary = d.pop("time_of_use_summary", UNSET)
+        time_of_use_summary: GetBillingSummaryResponse200DetailSummaryTimeOfUseSummary | Unset
+        if isinstance(_time_of_use_summary, Unset):
+            time_of_use_summary = UNSET
+        else:
+            time_of_use_summary = GetBillingSummaryResponse200DetailSummaryTimeOfUseSummary.from_dict(
+                _time_of_use_summary
+            )
 
         _totals = d.pop("totals", UNSET)
         totals: GetBillingSummaryResponse200DetailSummaryTotals | Unset
@@ -161,7 +157,7 @@ class GetBillingSummaryResponse200DetailSummary:
             credits_=credits_,
             period=period,
             storage_charges=storage_charges,
-            time_of_use_charges=time_of_use_charges,
+            time_of_use_summary=time_of_use_summary,
             totals=totals,
         )
 
