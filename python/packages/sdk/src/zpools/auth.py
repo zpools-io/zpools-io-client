@@ -86,7 +86,11 @@ class AuthManager:
         response = self._raw_client.get_httpx_client().post(url, json=payload)
 
         if response.status_code not in (200, 201):
-            raise RuntimeError(f"Login failed: {response.status_code} - {response.content}")
+            try:
+                detail = response.json().get("message", "")
+            except Exception:
+                detail = ""
+            raise RuntimeError(f"Login failed (HTTP {response.status_code}): {detail or 'authentication failed'}")
 
         data = response.json()
         detail = data.get("detail") or {}
