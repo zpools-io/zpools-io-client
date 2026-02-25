@@ -423,7 +423,21 @@ def run_pat_configure_wizard(
     PAT-only configure flow: build dashboard URL, open browser, prompt for pasted PAT, write rcfile.
     Distinguishes "no config yet" vs "config exists but missing PAT" so we don't imply overwriting.
     If plaintext is True, use plaintext prompts (no Rich UI). Returns True if config was written.
+    When stdin is not a TTY, does not prompt; returns False and prints a short error (for CI/scripts).
     """
+    if not sys.stdin.isatty():
+        if not _has_existing_config(existing_config):
+            console.print(
+                f"[red]Config file not found: {rc_file_path}. "
+                "Run 'zpcli login' or create the file manually (see --help).[/red]"
+            )
+        else:
+            console.print(
+                f"[red]Config file has no ZPOOLPAT: {rc_file_path}. "
+                "Run 'zpcli login' or add ZPOOLPAT to the file.[/red]"
+            )
+        return False
+
     has_existing = _has_existing_config(existing_config)
     if has_existing:
         console.print(
