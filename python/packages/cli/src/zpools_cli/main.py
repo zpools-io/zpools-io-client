@@ -46,10 +46,12 @@ def main_callback(
             if not run_pat_configure_wizard(rc_file_path, console, existing_config=None, plaintext=False):
                 raise typer.Exit(0)
         else:
-            config_pre = build_client_config(rc_file=rc_file_path)
-            if not (config_pre.get("pat") or "").strip():
-                if not run_pat_configure_wizard(rc_file_path, console, existing_config=config_pre, plaintext=False):
-                    raise typer.Exit(0)
+            # zfs (ssh, shell, send, recv) only needs SSH_HOST, SSH_PRIVKEY_FILE, ZPOOL_USER; no PAT
+            if ctx.invoked_subcommand != "zfs":
+                config_pre = build_client_config(rc_file=rc_file_path)
+                if not (config_pre.get("pat") or "").strip():
+                    if not run_pat_configure_wizard(rc_file_path, console, existing_config=config_pre, plaintext=False):
+                        raise typer.Exit(0)
     config = build_client_config(rc_file=rc_file_path)
     config["rc_file_path"] = rc_file_path
     ctx.obj = config
