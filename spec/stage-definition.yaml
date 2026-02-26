@@ -1,7 +1,7 @@
 openapi: 3.0.1
 info:
   title: ZpoolsAPI
-  version: 2026-02-20 20:39:00UTC
+  version: 2026-02-25 00:49:51UTC
 servers:
 - url: https://api.zpools.io/v1
 tags:
@@ -33,8 +33,8 @@ paths:
                 type: object
           description: Success
       security:
-      - CognitoAuthorizer: []
-      - ComboAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Test authentication
       description: Simple authenticated endpoint to verify API connectivity and test
         your JWT tokens or PAT.
@@ -84,7 +84,8 @@ paths:
                 type: object
           description: Balance retrieved
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Get account balance
       description: Retrieve the current account balance and credit information.
       tags:
@@ -141,7 +142,8 @@ paths:
         '400':
           description: Invalid date format or limit
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Get billing ledger
       description: Retrieve billing transaction history with optional date filters.
         Filters by event_ts date (when the event occurred).
@@ -211,7 +213,8 @@ paths:
                 type: object
           description: Runway retrieved
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Get billing runway
       description: 'Return burn rate and days remaining: EBS-only runway (current
         allocation × pricing) and ToU-adjusted runway (includes time-of-use charges
@@ -329,7 +332,8 @@ paths:
         '400':
           description: Invalid date format or date range exceeds 32 days
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Get billing summary
       description: Retrieve aggregated billing summary for a date range (max 32 days).
         When since/until omitted, returns the preceding calendar month. Groups hourly
@@ -386,8 +390,8 @@ paths:
                 type: object
           description: SSH keys retrieved
       security:
-      - CognitoAuthorizer: []
-      - ComboAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: List user's SSH keys
       description: Retrieve all SSH public keys registered for the authenticated user.
       tags:
@@ -431,7 +435,8 @@ paths:
           description: SSH key already registered (same key content yields same ID;
             no duplicate stored)
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Register SSH public key
       description: Add a new SSH public key for the authenticated user to enable SSH
         access to zpools.
@@ -461,7 +466,8 @@ paths:
         '404':
           description: SSH key not found
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Delete SSH key
       description: Remove an SSH public key from the user's account.
       tags:
@@ -546,7 +552,7 @@ paths:
                 type: object
           description: PATs retrieved
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
       summary: List personal access tokens
       description: Retrieve all active PATs for the authenticated user.
       tags:
@@ -561,7 +567,7 @@ paths:
         '404':
           description: PAT not found
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
       summary: Revoke personal access token
       description: Permanently revoke a PAT.
       tags:
@@ -641,8 +647,8 @@ paths:
                 type: object
           description: Zpools retrieved
       security:
-      - CognitoAuthorizer: []
-      - ComboAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: List user's zpools
       description: Retrieve all ZFS pools owned by the authenticated user.
       tags:
@@ -672,7 +678,8 @@ paths:
         '400':
           description: Invalid zpool configuration
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Create a new zpool
       description: Create a new ZFS storage pool with specified configuration.
       tags:
@@ -715,8 +722,8 @@ paths:
         '409':
           description: Some volumes are ineligible for modification
       security:
-      - CognitoAuthorizer: []
-      - ComboAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Modify zpool volume type
       description: Change the EBS volume type for all volumes in a zpool (e.g., gp3
         to sc1 or vice versa).
@@ -767,8 +774,8 @@ paths:
         '501':
           description: Not implemented - this feature is planned for a future release
       security:
-      - CognitoAuthorizer: []
-      - ComboAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Expand zpool size (Not Yet Implemented)
       description: Expand EBS volumes and ZFS pool to use additional space. This operation
         is planned but not yet available.
@@ -823,8 +830,8 @@ paths:
                 type: object
           description: Scrub initiated
       security:
-      - CognitoAuthorizer: []
-      - ComboAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Start zpool scrub
       description: Initiate a data integrity scrub on the specified zpool.
       tags:
@@ -853,7 +860,8 @@ paths:
         '404':
           description: Zpool not found
       security:
-      - CognitoAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Delete a zpool
       description: Permanently delete a ZFS pool and all its data.
       tags:
@@ -918,8 +926,8 @@ paths:
                 type: object
           description: Jobs retrieved
       security:
-      - CognitoAuthorizer: []
-      - ComboAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: List user's jobs
       description: Retrieve all background jobs (zpool operations) for the authenticated
         user.
@@ -989,8 +997,8 @@ paths:
         '404':
           description: Job not found
       security:
-      - CognitoAuthorizer: []
-      - ComboAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Get job details
       description: Retrieve detailed information about a specific job.
       tags:
@@ -1039,8 +1047,8 @@ paths:
                 type: object
           description: Job history retrieved
       security:
-      - CognitoAuthorizer: []
-      - ComboAuthorizer: []
+      - BearerJWT: []
+      - PersonalAccessToken: []
       summary: Get job history
       description: Retrieve the status change history for a specific job.
       tags:
@@ -1061,12 +1069,12 @@ paths:
         type: string
 components:
   securitySchemes:
-    CognitoAuthorizer:
+    BearerJWT:
       type: http
       scheme: bearer
       bearerFormat: JWT
       description: Enter your JWT token from the /login endpoint
-    ComboAuthorizer:
+    PersonalAccessToken:
       type: apiKey
       name: Authorization
       in: header
