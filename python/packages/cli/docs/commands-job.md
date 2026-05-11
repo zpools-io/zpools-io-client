@@ -2,7 +2,7 @@
 
 `zpcli job` — List and inspect background jobs. Many zpool operations (create, modify, scrub) are asynchronous: the CLI returns a **job ID** immediately; you use these commands to check status and view the timeline. Job IDs use the standard [resource ID format](../../../../docs/reference/ids.md).
 
-See [Async jobs](../../../../docs/reference/async-jobs.md) for how jobs relate to zpool commands and the `--wait` flag.
+See [Async jobs](../../../../docs/reference/async-jobs.md) for how jobs relate to zpool commands and the `--watch` flag.
 
 ## Commands
 
@@ -17,7 +17,7 @@ See [Async jobs](../../../../docs/reference/async-jobs.md) for how jobs relate t
 Operations such as **zpool create**, **zpool modify**, and **zpool scrub** can take minutes to hours. You get a **job ID** right away. The job moves through states (e.g. queued → in progress → succeeded or failed). You can:
 
 - **Poll once:** `zpcli job get <job_id>` or `zpcli job history <job_id>` to see current state and timeline.
-- **Wait on the originating command:** Many zpool commands support `--wait` so the CLI polls until the job completes (or times out).
+- **Watch on the originating command:** Many zpool commands support `--watch` so the CLI polls until the job completes (or times out).
 - **Watch history:** `zpcli job history <job_id> --watch` polls and updates the history display until the job completes or you hit a timeout.
 
 ---
@@ -117,7 +117,7 @@ zpcli job history JOB_ID --watch --timeout 600
 ## Relation to zpool commands
 
 - **zpool create / modify / scrub** return a job ID. You can then run `zpcli job get <job_id>` or `zpcli job history <job_id>` to check status and timeline.
-- Alternatively, use **`--wait`** on those commands so the CLI waits for the job to complete (or timeout) and then shows the outcome.
+- Alternatively, use **`--watch`** on those commands so the CLI polls for the job to complete (or timeout) and then shows the outcome.
 - **job history --watch** is another way to “wait” for a job you already started: it polls and updates the history until the job finishes.
 
 ---
@@ -126,5 +126,5 @@ zpcli job history JOB_ID --watch --timeout 600
 
 - [Command reference](commands.md)
 - [Resource IDs](../../../../docs/reference/ids.md) — Job IDs and the four-word hyphenated format
-- [Async jobs](../../../../docs/reference/async-jobs.md) — Polling, `--wait`, timeouts
-- [Zpool commands](commands-zpool.md) — Commands that return job IDs and support `--wait`
+- [Async jobs](../../../../docs/reference/async-jobs.md) — Polling, `--watch`, timeouts
+- [Zpool commands](commands-zpool.md) — Commands that return job IDs and support `--watch`

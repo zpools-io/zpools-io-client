@@ -16,7 +16,7 @@ Ensure `~/.local/bin` is in your PATH. See [Installation](docs/installation.md) 
 ```bash
 zpcli --help
 zpcli zpool list
-zpcli zpool create --size 125 --volume-type gp3 --wait
+zpcli zpool create --size 125 --volume-type gp3 --watch
 zpcli billing balance
 zpcli sshkey list
 ```

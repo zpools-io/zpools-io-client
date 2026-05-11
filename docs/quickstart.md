@@ -77,12 +77,12 @@ zpcli sshkey list
 
 > **Beta:** During beta, zpools are limited to **125 GiB** and **one zpool per user**. These limits will be relaxed after general availability.
 
-Create a zpool and wait for it to finish so you have a remote zpool for the validation steps below. Assign the size and type to variables so later steps can refer to them; then create and capture the zpool ID from the list.
+Create a zpool and watch it finish so you have a remote zpool for the validation steps below. Assign the size and type to variables so later steps can refer to them; then create and capture the zpool ID from the list.
 
 ```bash
 SIZE_GIB=125
 VOL_TYPE=gp3
-test -n "$SIZE_GIB" && test -n "$VOL_TYPE" && zpcli zpool create --size "$SIZE_GIB" --volume-type "$VOL_TYPE" --wait
+test -n "$SIZE_GIB" && test -n "$VOL_TYPE" && zpcli zpool create --size "$SIZE_GIB" --volume-type "$VOL_TYPE" --watch
 ```
 
 When it completes, list your zpools and set `ZPOOL_ID` from the output (use the ID shown for your new zpool):
@@ -98,7 +98,7 @@ Use the ID in later steps:
 test -n "$ZPOOL_ID" && zpcli zfs list "$ZPOOL_ID"
 ```
 
-If you ran create without `--wait`, poll by job ID:
+If you ran create without `--watch`, poll by job ID:
 
 ```bash
 JOB_ID=your-job-id

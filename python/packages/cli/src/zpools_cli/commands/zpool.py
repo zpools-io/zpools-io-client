@@ -144,9 +144,9 @@ def create_zpool(
     ctx: typer.Context,
     size: int = typer.Option(125, help="Size in GiB (must be 125 during beta)"),
     volume_type: str = typer.Option("gp3", help="EBS volume type (gp3, sc1)"),
-    wait: bool = typer.Option(False, "--wait", help="Wait for creation to complete"),
+    watch: bool = typer.Option(False, "--watch", help="Watch creation until it completes"),
     resume: bool = typer.Option(False, "--resume", help="Resume monitoring an existing creation job"),
-    timeout: int = typer.Option(1800, "--timeout", help="Timeout in seconds when using --wait or --resume (default: 1800)"),
+    timeout: int = typer.Option(1800, "--timeout", help="Timeout in seconds when using --watch or --resume (default: 1800)"),
     json_output: bool = typer.Option(False, "--json", help="Output raw JSON")
 ):
     """Create a new ZPool."""
@@ -175,14 +175,14 @@ def create_zpool(
         if response.status_code == 202:
             job_id = response.parsed.detail.job_id
             
-            if json_output and not wait:
+            if json_output and not watch:
                 print(json.dumps(response.parsed.to_dict(), indent=2, default=str))
-            elif not wait:
+            elif not watch:
                 console.print(f"[green]ZPool creation started![/green]")
                 console.print(f"Job ID: {job_id}")
             
-            # Wait for completion if requested
-            if wait:
+            # Watch for completion if requested
+            if watch:
                 if json_output:
                     from zpools.helpers import JobPoller
                     poller = JobPoller(client, job_id, timeout=timeout, poll_interval=10)
@@ -253,10 +253,10 @@ def modify_zpool(
     ctx: typer.Context,
     zpool_id: str = typer.Argument(..., help="ZPool ID to modify"),
     volume_type: str = typer.Option(None, "--type", help="Target volume type (gp3 or sc1)"),
-    wait: bool = typer.Option(False, "--wait", help="Wait for modification to complete after submission"),
+    watch: bool = typer.Option(False, "--watch", help="Watch modification until it completes after submission"),
     wait_until_able: bool = typer.Option(False, "--wait-until-able", help="Wait until cooldown period expires, then submit modification"),
     resume: bool = typer.Option(False, "--resume", help="Resume monitoring an existing modification in progress"),
-    timeout: int = typer.Option(1800, "--timeout", help="Timeout in seconds for modification monitoring (applies to --wait and --resume only)"),
+    timeout: int = typer.Option(1800, "--timeout", help="Timeout in seconds for modification monitoring (applies to --watch and --resume only)"),
     json_output: bool = typer.Option(False, "--json", help="Output raw JSON response"),
     use_local_tz: bool = typer.Option(False, "--local", help="Show timestamps in local timezone (default: UTC)")
 ):
@@ -340,16 +340,16 @@ def modify_zpool(
         response = client.modify_zpool(zpool_id, target_volume_type=volume_type)
         
         if response.status_code == 202:
-            if json_output and not wait:
+            if json_output and not watch:
                 print(json.dumps(response.parsed.to_dict(), indent=2, default=str))
-            elif not wait:
+            elif not watch:
                 console.print(f"[green]ZPool {zpool_id} volume type modification submitted.[/green]")
                 if response.parsed and response.parsed.detail:
                     summary = response.parsed.detail.summary
                     console.print(f"Submitted: {summary.submitted}/{summary.discovered} volumes")
             
-            # Wait for completion if requested
-            if wait:
+            # Watch for completion if requested
+            if watch:
                 if json_output:
                     from zpools.helpers import ModifyPoller
                     poller = ModifyPoller(client, zpool_id, timeout=timeout, poll_interval=10)
@@ -441,9 +441,9 @@ def expand_zpool(
 def scrub_zpool(
     ctx: typer.Context,
     zpool_id: str = typer.Argument(..., help="ZPool ID to scrub"),
-    wait: bool = typer.Option(False, "--wait", help="Wait for scrub to complete"),
+    watch: bool = typer.Option(False, "--watch", help="Watch scrub until it completes"),
     resume: bool = typer.Option(False, "--resume", help="Resume monitoring an existing scrub"),
-    timeout: int = typer.Option(1800, "--timeout", help="Timeout in seconds when using --wait or --resume (default: 1800)"),
+    timeout: int = typer.Option(1800, "--timeout", help="Timeout in seconds when using --watch or --resume (default: 1800)"),
     json_output: bool = typer.Option(False, "--json", help="Output raw JSON")
 ):
     """Start a scrub on a ZPool."""
@@ -468,14 +468,14 @@ def scrub_zpool(
         if response.status_code == 202:
             job_id = response.parsed.detail.job_id
             
-            if json_output and not wait:
+            if json_output and not watch:
                 print(json.dumps(response.parsed.to_dict(), indent=2, default=str))
-            elif not wait:
+            elif not watch:
                 console.print(f"[green]Scrub started for ZPool {zpool_id}.[/green]")
                 console.print(f"Job ID: {job_id}")
             
-            # Wait for completion if requested
-            if wait:
+            # Watch for completion if requested
+            if watch:
                 if json_output:
                     from zpools.helpers import JobPoller
                     poller = JobPoller(client, job_id, timeout=timeout, poll_interval=5)

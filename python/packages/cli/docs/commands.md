@@ -24,7 +24,7 @@
 ## Auth and async
 
 - **Auth:** Commands that need auth use JWT (interactive prompt or env) or PAT. See [Authentication](../../../../docs/authentication.md).
-- **Async vs sync:** Commands like `zpool create`, `zpool modify`, `zpool scrub` return a job ID by default. Use `--wait` to poll until completion. See [Async jobs](../../../../docs/reference/async-jobs.md).
+- **Async vs sync:** Commands like `zpool create`, `zpool modify`, `zpool scrub` return a job ID by default. Use `--watch` to poll until completion. See [Async jobs](../../../../docs/reference/async-jobs.md).
 
 ## Tab completion
 

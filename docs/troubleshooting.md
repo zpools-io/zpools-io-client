@@ -23,7 +23,7 @@ This page covers **conceptual** causes and fixes. For tool-specific errors (exit
 ## Job timeouts
 
 - Some operations (create zpool, modify, scrub) are **asynchronous** and return a job ID. If you wait for completion, the client polls until the job finishes or a timeout is reached.
-- **Timeout too short:** Increase the wait timeout if your operation is slow (see [Async jobs](reference/async-jobs.md#polling-and-timeouts)). CLI: use `--wait` and check for timeout options in the [command reference](../python/packages/cli/docs/commands.md).
+- **Timeout too short:** Increase the watch timeout if your operation is slow (see [Async jobs](reference/async-jobs.md#polling-and-timeouts)). CLI: use `--watch` and check for timeout options in the [command reference](../python/packages/cli/docs/commands.md).
 - **Job failed:** Inspect job status (CLI: `zpcli job get <job_id>`; SDK: `get_job`). See [reference/async-jobs.md](reference/async-jobs.md).
 
 ## ZFS errors
