@@ -10,6 +10,7 @@ from zpools_cli.job_monitor import wait_for_job_with_progress
 from zpools_cli.job_helpers import find_and_resume_job
 from zpools_cli.volume_monitor import wait_for_modify_with_progress
 from zpools_cli.wait_helpers import wait_with_token_refresh
+from zpools_cli.watch_timeout import WATCH_TIMEOUT_EXIT_CODE, exit_watch_timeout
 from zpools._generated.api.zpools import (
     get_zpools,
     post_zpool,
@@ -27,6 +28,34 @@ from zpools_cli.help_scopes import ScopedGroup
 
 app = typer.Typer(help="Manage ZFS pools", no_args_is_help=True, cls=ScopedGroup)
 console = Console()
+
+MODIFY_WATCH_TIMEOUT_SECONDS = 43200
+
+
+def _print_modify_watch_timeout(zpool_id: str, request_submitted: bool) -> None:
+    if request_submitted:
+        console.print("[yellow]Watch timed out:[/yellow] EBS modification may still be running.")
+        console.print("The modify request was accepted; AWS may continue optimizing the volume after the CLI exits.")
+    else:
+        console.print("[yellow]Watch timed out:[/yellow] EBS modification may still be running.")
+        console.print("The CLI stopped monitoring an existing modification; AWS may continue optimizing the volume.")
+    console.print("Check status: zpcli zpool list")
+    console.print(f"Resume watching: zpcli zpool modify {zpool_id} --resume")
+    console.print("Use a larger timeout: zpcli zpool modify <zpool_id> --resume --timeout <seconds>")
+
+
+def _exit_modify_watch_timeout(zpool_id: str, request_submitted: bool, json_output: bool) -> None:
+    if not json_output:
+        _print_modify_watch_timeout(zpool_id, request_submitted=request_submitted)
+        raise typer.Exit(WATCH_TIMEOUT_EXIT_CODE)
+    exit_watch_timeout(
+        console,
+        message="Watch timed out; EBS modification may still be running.",
+        json_output=True,
+        zpool_id=zpool_id,
+        resume_command=f"zpcli zpool modify {zpool_id} --resume",
+        request_submitted=request_submitted,
+    )
 
 
 @app.command("list")
@@ -185,9 +214,17 @@ def create_zpool(
             if watch:
                 if json_output:
                     from zpools.helpers import JobPoller
-                    poller = JobPoller(client, job_id, timeout=timeout, poll_interval=10)
-                    final_job = poller.wait_for_completion()
-                    print(json.dumps(final_job, indent=2, default=str))
+                    try:
+                        poller = JobPoller(client, job_id, timeout=timeout, poll_interval=10)
+                        final_job = poller.wait_for_completion()
+                        print(json.dumps(final_job, indent=2, default=str))
+                    except TimeoutError:
+                        exit_watch_timeout(
+                            console,
+                            message="ZPool creation did not complete before the watch timeout; the job may still be running.",
+                            json_output=True,
+                            job_id=job_id,
+                        )
                 else:
                     try:
                         final_job = wait_for_job_with_progress(
@@ -199,14 +236,19 @@ def create_zpool(
                             zpool_id = msg.split('zpool_id:')[1].strip()
                             console.print(f"ZPool ID: [cyan]{zpool_id}[/cyan]")
                     except TimeoutError:
-                        console.print(f"[red]Timeout waiting for job to complete[/red]")
-                        console.print(f"Job ID: {job_id}")
+                        exit_watch_timeout(
+                            console,
+                            message="ZPool creation did not complete before the watch timeout; the job may still be running.",
+                            job_id=job_id,
+                        )
                     except RuntimeError:
                         console.print(f"Job ID: {job_id}")
         else:
             error_msg = format_error_response(response.status_code, response.content, json_output)
             console.print(f"[red]Error {response.status_code}:[/red] {error_msg}")
 
+    except typer.Exit:
+        raise
     except Exception as e:
         console.print(f"[red]An error occurred:[/red] {e}")
 
@@ -256,7 +298,7 @@ def modify_zpool(
     watch: bool = typer.Option(False, "--watch", help="Watch modification until it completes after submission"),
     wait_until_able: bool = typer.Option(False, "--wait-until-able", help="Wait until cooldown period expires, then submit modification"),
     resume: bool = typer.Option(False, "--resume", help="Resume monitoring an existing modification in progress"),
-    timeout: int = typer.Option(1800, "--timeout", help="Timeout in seconds for modification monitoring (applies to --watch and --resume only)"),
+    timeout: int = typer.Option(MODIFY_WATCH_TIMEOUT_SECONDS, "--timeout", help="Timeout in seconds for modification monitoring (applies to --watch and --resume only; default: 43200 / 12 hours)"),
     json_output: bool = typer.Option(False, "--json", help="Output raw JSON response"),
     use_local_tz: bool = typer.Option(False, "--local", help="Show timestamps in local timezone (default: UTC)")
 ):
@@ -273,9 +315,12 @@ def modify_zpool(
         if resume:
             if json_output:
                 from zpools.helpers import ModifyPoller
-                poller = ModifyPoller(client, zpool_id, timeout=timeout, poll_interval=10)
-                final_zpool = poller.wait_for_completion()
-                print(json.dumps(final_zpool, indent=2, default=str))
+                try:
+                    poller = ModifyPoller(client, zpool_id, timeout=timeout, poll_interval=10)
+                    final_zpool = poller.wait_for_completion()
+                    print(json.dumps(final_zpool, indent=2, default=str))
+                except TimeoutError:
+                    _exit_modify_watch_timeout(zpool_id, request_submitted=False, json_output=json_output)
             else:
                 console.print(f"[cyan]Resuming monitoring of ZPool {zpool_id} modification...[/cyan]")
                 try:
@@ -283,7 +328,7 @@ def modify_zpool(
                         client, zpool_id, timeout=timeout, poll_interval=10
                     )
                 except TimeoutError:
-                    console.print(f"[red]Timeout waiting for modification to complete[/red]")
+                    _exit_modify_watch_timeout(zpool_id, request_submitted=False, json_output=json_output)
                 except Exception as e:
                     console.print(f"[red]Error waiting for completion: {e}[/red]")
             return
@@ -352,16 +397,19 @@ def modify_zpool(
             if watch:
                 if json_output:
                     from zpools.helpers import ModifyPoller
-                    poller = ModifyPoller(client, zpool_id, timeout=timeout, poll_interval=10)
-                    final_zpool = poller.wait_for_completion()
-                    print(json.dumps(final_zpool, indent=2, default=str))
+                    try:
+                        poller = ModifyPoller(client, zpool_id, timeout=timeout, poll_interval=10)
+                        final_zpool = poller.wait_for_completion()
+                        print(json.dumps(final_zpool, indent=2, default=str))
+                    except TimeoutError:
+                        _exit_modify_watch_timeout(zpool_id, request_submitted=True, json_output=json_output)
                 else:
                     try:
                         final_zpool = wait_for_modify_with_progress(
                             client, zpool_id, timeout=timeout, poll_interval=10
                         )
                     except TimeoutError:
-                        console.print(f"[red]Timeout waiting for modification to complete[/red]")
+                        _exit_modify_watch_timeout(zpool_id, request_submitted=True, json_output=json_output)
                     except Exception as e:
                         console.print(f"[red]Error waiting for completion: {e}[/red]")
         elif response.status_code == 409:
@@ -418,6 +466,8 @@ def modify_zpool(
             else:
                 console.print(f"[red]Error {response.status_code}:[/red] {error_msg}")
 
+    except typer.Exit:
+        raise
     except Exception as e:
         console.print(f"[red]An error occurred:[/red] {e}")
 
@@ -478,17 +528,28 @@ def scrub_zpool(
             if watch:
                 if json_output:
                     from zpools.helpers import JobPoller
-                    poller = JobPoller(client, job_id, timeout=timeout, poll_interval=5)
-                    final_job = poller.wait_for_completion()
-                    print(json.dumps(final_job, indent=2, default=str))
+                    try:
+                        poller = JobPoller(client, job_id, timeout=timeout, poll_interval=5)
+                        final_job = poller.wait_for_completion()
+                        print(json.dumps(final_job, indent=2, default=str))
+                    except TimeoutError:
+                        exit_watch_timeout(
+                            console,
+                            message="ZPool scrub did not complete before the watch timeout; the job may still be running.",
+                            json_output=True,
+                            job_id=job_id,
+                        )
                 else:
                     try:
                         final_job = wait_for_job_with_progress(
                             client, job_id, "ZPool scrub", timeout=timeout, poll_interval=5
                         )
                     except TimeoutError:
-                        console.print(f"[red]Timeout waiting for scrub to complete[/red]")
-                        console.print(f"Job ID: {job_id}")
+                        exit_watch_timeout(
+                            console,
+                            message="ZPool scrub did not complete before the watch timeout; the job may still be running.",
+                            job_id=job_id,
+                        )
                     except RuntimeError:
                         console.print(f"Job ID: {job_id}")
         else:
@@ -498,5 +559,7 @@ def scrub_zpool(
             else:
                 console.print(f"[red]Error {response.status_code}:[/red] {error_msg}")
 
+    except typer.Exit:
+        raise
     except Exception as e:
         console.print(f"[red]An error occurred:[/red] {e}")

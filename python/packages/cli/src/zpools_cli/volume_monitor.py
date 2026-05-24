@@ -6,7 +6,7 @@ from rich.console import Group
 from zpools_cli.progress import ProgressMonitor
 
 
-def wait_for_modify_with_progress(client, zpool_id: str, timeout: int = 1800, poll_interval: int = 60) -> dict:
+def wait_for_modify_with_progress(client, zpool_id: str, timeout: int = 43200, poll_interval: int = 60) -> dict:
     """
     Wait for zpool volume modifications to complete with live progress display.
     

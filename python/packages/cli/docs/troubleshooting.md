@@ -6,6 +6,7 @@ CLI-specific errors and fixes. For conceptual causes (auth, SSH, jobs, etc.), se
 
 - **0** — Success.
 - **1** — General error (e.g. validation, config, or request failure). Check the message printed by `zpcli`.
+- **3** — Watch timeout. The requested `--watch` did not observe completion before its timeout; the underlying job or EBS modification may still be running.
 - Non-zero from ZFS/SSH — Propagated from the underlying command (e.g. `zfs` or `ssh`).
 
 ## Common CLI messages

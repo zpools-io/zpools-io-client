@@ -5,6 +5,7 @@ from typing import Optional
 from rich.console import Console
 from zpools_cli.utils import format_error_response
 from zpools_cli.job_monitor import wait_for_job_with_progress
+from zpools_cli.watch_timeout import exit_watch_timeout
 from zpools._generated.types import UNSET
 
 console = Console()
@@ -109,9 +110,17 @@ def find_and_resume_job(
     # Monitor the job to completion
     if json_output:
         from zpools.helpers import JobPoller
-        poller = JobPoller(client, job_id, timeout=timeout, poll_interval=10)
-        final_job = poller.wait_for_completion()
-        print(json.dumps(final_job, indent=2, default=str))
+        try:
+            poller = JobPoller(client, job_id, timeout=timeout, poll_interval=10)
+            final_job = poller.wait_for_completion()
+            print(json.dumps(final_job, indent=2, default=str))
+        except TimeoutError:
+            exit_watch_timeout(
+                console,
+                message=f"{operation_name} did not complete before the watch timeout; the job may still be running.",
+                json_output=True,
+                job_id=job_id,
+            )
     else:
         try:
             final_job = wait_for_job_with_progress(
@@ -119,9 +128,11 @@ def find_and_resume_job(
             )
             return final_job
         except TimeoutError:
-            console.print(f"[red]Timeout waiting for job to complete[/red]")
-            console.print(f"Job ID: {job_id}")
-            raise typer.Exit(1)
+            exit_watch_timeout(
+                console,
+                message=f"{operation_name} did not complete before the watch timeout; the job may still be running.",
+                job_id=job_id,
+            )
         except RuntimeError:
             console.print(f"Job ID: {job_id}")
             raise typer.Exit(1)

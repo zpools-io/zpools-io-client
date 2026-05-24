@@ -5,6 +5,7 @@ from rich.console import Console
 from rich.table import Table
 from zpools_cli.utils import get_authenticated_client, format_error_response, is_interactive, format_timestamp
 from zpools_cli.job_monitor import wait_for_job_with_progress
+from zpools_cli.watch_timeout import exit_watch_timeout
 from zpools._generated.api.jobs import (
     get_jobs,
     get_job_job_id,
@@ -247,8 +248,11 @@ def job_history(
                     timeout=timeout, poll_interval=poll_interval
                 )
             except TimeoutError:
-                console.print(f"[red]Timeout waiting for job {job_id} to complete[/red]")
-                raise typer.Exit(1)
+                exit_watch_timeout(
+                    console,
+                    message=f"Job {job_id} did not complete before the watch timeout; it may still be running.",
+                    job_id=job_id,
+                )
             except RuntimeError as e:
                 # RuntimeError is raised when job fails - message already printed by wait_for_job_with_progress
                 raise typer.Exit(1)

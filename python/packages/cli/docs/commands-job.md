@@ -14,7 +14,7 @@ See [Async jobs](../../../../docs/reference/async-jobs.md) for how jobs relate t
 
 ## Why jobs exist
 
-Operations such as **zpool create**, **zpool modify**, and **zpool scrub** can take minutes to hours. You get a **job ID** right away. The job moves through states (e.g. queued → in progress → succeeded or failed). You can:
+Operations such as **zpool create** and **zpool scrub** can take minutes to hours. You get a **job ID** right away. The job moves through states (e.g. queued → in progress → succeeded or failed). Volume type changes from **zpool modify** are also asynchronous, but they are tracked through zpool volume state instead of job history. You can:
 
 - **Poll once:** `zpcli job get <job_id>` or `zpcli job history <job_id>` to see current state and timeline.
 - **Watch on the originating command:** Many zpool commands support `--watch` so the CLI polls until the job completes (or times out).
@@ -117,7 +117,7 @@ zpcli job history JOB_ID --watch --timeout 600
 ## Relation to zpool commands
 
 - **zpool create / modify / scrub** return a job ID. You can then run `zpcli job get <job_id>` or `zpcli job history <job_id>` to check status and timeline.
-- Alternatively, use **`--watch`** on those commands so the CLI polls for the job to complete (or timeout) and then shows the outcome.
+- Alternatively, use **`--watch`** on those commands so the CLI polls for completion (or timeout) and then shows the outcome.
 - **job history --watch** is another way to “wait” for a job you already started: it polls and updates the history until the job finishes.
 
 ---

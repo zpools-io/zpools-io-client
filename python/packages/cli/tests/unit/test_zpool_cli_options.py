@@ -27,3 +27,17 @@ def test_modify_keeps_wait_until_able_option():
     assert result.exit_code == 0
     assert "--wait-until-able" in result.output
     assert "Wait until cooldown period expires" in result.output
+
+
+def test_modify_watch_timeout_default_is_longer_than_other_async_commands():
+    modify_result = runner.invoke(app, ["zpool", "modify", "ZPOOL_ID", "--help"])
+    create_result = runner.invoke(app, ["zpool", "create", "--help"])
+    scrub_result = runner.invoke(app, ["zpool", "scrub", "ZPOOL_ID", "--help"])
+
+    assert modify_result.exit_code == 0
+    assert create_result.exit_code == 0
+    assert scrub_result.exit_code == 0
+
+    assert "43200" in modify_result.output
+    assert "1800" in create_result.output
+    assert "1800" in scrub_result.output

@@ -15,7 +15,7 @@ See [Storage units](../../../../docs/reference/storage-units.md), [Async jobs](.
 - `zpcli zpool list` — List your zpools with per-zpool volume details (size, type, state, modification status).
 - `zpcli zpool create` — Create a zpool. Returns a job ID; use `--watch` to watch completion. Options: `--size`, `--volume-type` (gp3, sc1), `--watch`, `--resume`, `--timeout`, `--json`.
 - `zpcli zpool delete <zpool_id>` — Delete a zpool. Options: `--json`.
-- `zpcli zpool modify <zpool_id>` — Submit a volume type change (gp3 ↔ sc1). Returns a job ID; use `--watch` or `--wait-until-able`. Options: `--type`, `--watch`, `--wait-until-able`, `--resume`, `--timeout`, `--json`, `--local`.
+- `zpcli zpool modify <zpool_id>` — Submit a volume type change (gp3 ↔ sc1). The EBS modification runs asynchronously; use `--watch` or `--wait-until-able`. Options: `--type`, `--watch`, `--wait-until-able`, `--resume`, `--timeout`, `--json`, `--local`.
 - `zpcli zpool expand <zpool_id>` — Expand a zpool (not yet implemented). Options: `--size`, `--json`.
 - `zpcli zpool scrub <zpool_id>` — Start a scrub. Returns a job ID; use `--watch` to watch completion. Options: `--watch`, `--resume`, `--timeout`, `--json`.
 
@@ -141,7 +141,7 @@ zpcli zpool delete law-hotel-shape-community --json
 zpcli zpool modify <zpool_id> [OPTIONS]
 ```
 
-Submits a **volume type** change for the zpool’s EBS volume(s): **gp3** ↔ **sc1**. The API accepts the request and returns a **job ID**; the actual modification runs asynchronously. Use `--watch` to have the CLI poll until the modification completes, or poll with job commands.
+Submits a **volume type** change for the zpool’s EBS volume(s): **gp3** ↔ **sc1**. The API accepts the request immediately; the actual EBS modification runs asynchronously and is tracked through zpool volume state. Use `--watch` to have the CLI poll until the modification completes.
 
 AWS enforces a **6-hour cooldown** between volume modifications. If you try to modify again before the cooldown expires, the CLI reports a conflict. Use `--wait-until-able` to have the CLI wait for the cooldown to expire and then submit the modification automatically.
 
@@ -157,10 +157,10 @@ AWS enforces a **6-hour cooldown** between volume modifications. If you try to m
   - **gp3** — General Purpose SSD. Use for higher performance; typically higher cost than sc1.
   - **sc1** — Cold HDD. Use for lower cost when access patterns are less demanding.
   You can switch between them (e.g. gp3 → sc1 to save cost, or sc1 → gp3 for better performance). Unsupported types (e.g. st1) are rejected; use gp3 or sc1 only.
-- `--watch` — After submitting the modify job, poll until the modification completes (or timeout). Without `--watch`, the command prints a success message and the job ID; you can use job commands or `--resume` later to monitor.
+- `--watch` — After submitting the modify request, poll until the EBS modification completes (or the watch timeout is reached). Without `--watch`, the command prints a success message; you can use `--resume` later to monitor.
 - `--wait-until-able` — Before submitting, check whether the zpool’s volume(s) are in the AWS 6-hour cooldown. If any volume cannot be modified yet, the CLI **waits** until the cooldown expires (showing status and retry time), then submits the modification. There is no timeout for this wait (the end time is known); use Ctrl+C to abort if needed. Use this when you want to “modify as soon as allowed” in one command.
-- `--resume` — Do not submit a new modification; find an existing **zpool modify** job for this zpool that is still in progress and monitor it until completion (or timeout). Requires no `--type`. Useful if you ran `modify` without `--watch` and want to reattach.
-- `--timeout <seconds>` — Timeout in seconds when using `--watch` or `--resume`. Default: **1800** (30 minutes).
+- `--resume` — Do not submit a new modification; monitor an existing EBS volume modification for this zpool until completion (or timeout). Requires no `--type`. Useful if you ran `modify` without `--watch` and want to reattach.
+- `--timeout <seconds>` — Timeout in seconds when using `--watch` or `--resume`. Default for modify watches: **43200** (12 hours). If the watch times out, the EBS modification may continue after the CLI exits; check status with `zpcli zpool list` or reattach with `zpcli zpool modify <zpool_id> --resume`.
 - `--json` — Output raw JSON instead of the formatted messages.
 - `--local` — When showing cooldown retry time (e.g. after a conflict or during `--wait-until-able`), show timestamps in local timezone instead of UTC.
 
@@ -172,6 +172,10 @@ AWS enforces a **6-hour cooldown** between volume modifications. If you try to m
 
 - Message that the modification was submitted.
 - **Submitted:** X/Y volumes (how many were submitted vs discovered).
+
+**Watch timeout behavior**
+
+If `--watch` or `--resume` reaches its timeout, the CLI exits with a distinct watch-timeout status. This means the CLI stopped monitoring; it does **not** cancel the EBS modification. The volume may continue in `modifying` or `optimizing` state until AWS finishes the change.
 
 **Examples**
 

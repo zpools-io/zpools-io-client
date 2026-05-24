@@ -37,3 +37,15 @@ Tab completion does not work with `uv run zpcli`.
 
 - **SDK source:** `packages/sdk/src/zpools`
 - **CLI source:** `packages/cli/src/zpools_cli`
+
+## Testing
+
+Automated tests in this repo target only the CLI and SDK packages under `python/packages/`. They use mocks and do not perform network I/O. They are not substitutes for backend or full-stack tests, which live elsewhere.
+
+Run CLI tests from the repository root:
+
+```bash
+PYTHONPATH="$PWD/python/packages/cli/src:$PWD/python/packages/sdk/src" uv run pytest python/packages/cli/tests/unit -q
+```
+
+Run this before changing CLI command wiring, option defaults, exit codes, or user-visible output. SDK tests are not present yet; when added, they should follow the same no-network default.
